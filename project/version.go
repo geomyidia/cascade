@@ -1,10 +1,13 @@
-// Package version exposes build metadata that the Makefile injects into
+// Package project exposes build metadata that the Makefile injects into
 // cascade binaries via -ldflags. The package vars are empty by default,
 // so a binary built without ldflags (e.g. a plain `go install`) reports
 // "N/A" through the helpers rather than misleading hard-coded defaults.
 //
 // Modeled on the zylog version-package pattern, adapted to cascade.
-package version
+// Lives at the top level (not under util/) and named `project` so call
+// sites read naturally as project.VersionString() rather than the
+// package-stutter version.VersionString().
+package project
 
 import (
 	"fmt"

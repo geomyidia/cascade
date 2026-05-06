@@ -34,7 +34,7 @@ PACKAGES=(
     "github.com/geomyidia/cascade/golist"
     "github.com/geomyidia/cascade/depgraph"
     "github.com/geomyidia/cascade/changeset"
-    "github.com/geomyidia/cascade/util/version"
+    "github.com/geomyidia/cascade/project"
 )
 THRESHOLDS=(100 100 100 100)
 

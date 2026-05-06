@@ -9,7 +9,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/geomyidia/cascade/util/version"
+	"github.com/geomyidia/cascade/project"
 )
 
 func main() {
@@ -41,7 +41,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	if *showVersion {
 		fmt.Fprintf(stdout, "cascade %s (build %s)\n",
-			version.VersionString(), version.BuildString())
+			project.VersionString(), project.BuildString())
 		return 0
 	}
 

@@ -86,7 +86,7 @@ func TestRun(t *testing.T) {
 }
 
 // Layer 2: end-to-end smoke test. Builds the binary with -ldflags injecting
-// known values into the util/version package, then exec's it with --version.
+// known values into the project package, then exec's it with --version.
 // Proves the build + version-injection chain end-to-end. Skipped under -short
 // because it shells out to `go build` and is meaningfully slower than the
 // unit tests.
@@ -104,7 +104,7 @@ func TestCascadeBinaryVersion(t *testing.T) {
 	binPath := filepath.Join(tmp, binName)
 
 	const (
-		versionPkg      = "github.com/geomyidia/cascade/util/version"
+		versionPkg      = "github.com/geomyidia/cascade/project"
 		injectedVersion = "test-1.0.0"
 		injectedCommit  = "abcdef0"
 		injectedBranch  = "test-branch"

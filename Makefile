@@ -21,8 +21,9 @@ GIT_SUMMARY := $(shell git describe --tags --dirty --always 2>/dev/null || echo 
 BUILD_DATE := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 GO_VERSION := $(shell go version 2>/dev/null | awk '{print $$3}' || echo "unknown")
 
-# Fully-qualified import path for the version package targeted by ldflags.
-VERSION_PKG := $(MODULE_PATH)/util/version
+# Fully-qualified import path for the project (build-metadata) package
+# targeted by ldflags.
+VERSION_PKG := $(MODULE_PATH)/project
 
 # Coverage
 COVERAGE_FILE := coverage.out
@@ -32,7 +33,7 @@ COVERAGE_THRESHOLD := 90
 # List of binaries to build and install (matches subdirectories under cmd/)
 BINARIES := cascade
 
-# ldflags for version injection — populates the util/version package vars at link time.
+# ldflags for version injection — populates the project package vars at link time.
 # No inner quoting: -X values never contain spaces (commit hashes, refs, ISO-8601 timestamps),
 # so the surrounding shell double-quotes in the recipe are sufficient.
 LDFLAGS_VERSION := -X $(VERSION_PKG).Version=$(VERSION) \
