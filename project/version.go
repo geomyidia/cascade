@@ -16,8 +16,12 @@
 //
 // VERSION file is the *only* source for the `Version` field. ReadBuildInfo's
 // `Main.Version` (a pseudo-version like v0.0.0-...-<sha> or a real semver
-// tag) is intentionally ignored; bumping cascade's version is a one-file
-// edit at project/VERSION.
+// tag) is never used for `Version` — bumping cascade's version is a one-file
+// edit at project/VERSION. However, when `Main.Version` *is* a pseudo-version,
+// its trailing 12-char commit prefix and 14-digit timestamp are extracted as
+// fallbacks for `GitCommit` and `BuildDate` respectively. This closes the
+// proxy-install gap: a `go install ...@<sha>` built from the Go module proxy
+// (where vcs.* settings are absent) still reports the actual commit.
 //
 // Modeled on the zylog version-package pattern, adapted to cascade.
 package project
@@ -26,9 +30,11 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"time"
 )
 
 // versionFile is the VERSION file's contents, embedded at compile time.
@@ -117,6 +123,15 @@ func readBuildInfoFallback() {
 // applyBuildInfo is the testable seam for readBuildInfoFallback's
 // scanning logic. Takes an injectable BuildInfo so tests can drive
 // every branch with synthetic settings.
+//
+// Fallback order for git metadata (each field independently):
+//
+//  1. info.Settings vcs.* keys (present when built from a git working tree).
+//  2. Pseudo-version suffix on info.Main.Version (present when built via
+//     the Go module proxy from a commit SHA).
+//
+// Either path can populate GitCommit and BuildDate; ldflags-injected values
+// always win because the field is only set when empty.
 func applyBuildInfo(info *debug.BuildInfo) {
 	var revision, modified, vcsTime string
 	for _, s := range info.Settings {
@@ -142,6 +157,48 @@ func applyBuildInfo(info *debug.BuildInfo) {
 	if BuildDate == "" && vcsTime != "" {
 		BuildDate = vcsTime
 	}
+
+	// If either field is still empty and Main.Version looks like a
+	// pseudo-version (proxy-install path), extract from there.
+	if GitCommit != "" && BuildDate != "" {
+		return
+	}
+	pseudoCommit, pseudoDate, ok := parsePseudoVersion(info.Main.Version)
+	if !ok {
+		return
+	}
+	if GitCommit == "" {
+		GitCommit = pseudoCommit
+	}
+	if BuildDate == "" {
+		BuildDate = pseudoDate
+	}
+}
+
+// pseudoVersionSuffix matches the trailing "<14-digit-timestamp>-<12-hex-commit>"
+// pattern in a Go module pseudo-version. Two forms are accepted:
+//
+//   - "v0.0.0-20260506200756-4fd94246d2e2"        (no prior tag — leading "-")
+//   - "v0.1.1-0.20260506200756-4fd94246d2e2"      (after a tag — leading ".")
+//
+// Real semver tags ("v0.1.0", "v1.2.3-rc1") don't match.
+var pseudoVersionSuffix = regexp.MustCompile(`[-.](\d{14})-([a-f0-9]{12})$`)
+
+// parsePseudoVersion extracts the commit prefix and ISO-formatted commit
+// time from a Go module pseudo-version string. Returns ok=false if the
+// input isn't a pseudo-version (real semver tag, empty, or malformed
+// timestamp). Commit is truncated to 7 chars to match the project's
+// short-SHA convention.
+func parsePseudoVersion(v string) (commit, date string, ok bool) {
+	m := pseudoVersionSuffix.FindStringSubmatch(v)
+	if m == nil {
+		return "", "", false
+	}
+	t, err := time.Parse("20060102150405", m[1])
+	if err != nil {
+		return "", "", false
+	}
+	return m[2][:7], t.UTC().Format(time.RFC3339), true
 }
 
 // VersionString returns Version if set, else "N/A". With the embedded

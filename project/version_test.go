@@ -129,6 +129,7 @@ func TestApplyBuildInfo(t *testing.T) {
 		name        string
 		startCommit string
 		startDate   string
+		mainVersion string
 		settings    []debug.BuildSetting
 		wantCommit  string
 		wantDate    string
@@ -199,6 +200,56 @@ func TestApplyBuildInfo(t *testing.T) {
 			wantDate:   "preset-date",
 		},
 		{
+			name:        "pseudo-version Main.Version fills both when vcs.* absent",
+			startCommit: "",
+			startDate:   "",
+			mainVersion: "v0.0.0-20260506200756-4fd94246d2e2",
+			settings:    nil,
+			wantCommit:  "4fd9424",
+			wantDate:    "2026-05-06T20:07:56Z",
+		},
+		{
+			name:        "pseudo-version filling Main.Version with patched-tag prefix",
+			startCommit: "",
+			startDate:   "",
+			mainVersion: "v0.1.1-0.20260506200756-4fd94246d2e2",
+			settings:    nil,
+			wantCommit:  "4fd9424",
+			wantDate:    "2026-05-06T20:07:56Z",
+		},
+		{
+			name:        "real semver Main.Version does not populate fallback",
+			startCommit: "",
+			startDate:   "",
+			mainVersion: "v0.1.0",
+			settings:    nil,
+			wantCommit:  "",
+			wantDate:    "",
+		},
+		{
+			name:        "vcs.* wins over pseudo-version",
+			startCommit: "",
+			startDate:   "",
+			mainVersion: "v0.0.0-20260506200756-4fd94246d2e2",
+			settings: []debug.BuildSetting{
+				{Key: "vcs.revision", Value: "deadbeefcafe1234"},
+				{Key: "vcs.time", Value: "2025-01-01T00:00:00Z"},
+			},
+			wantCommit: "deadbee",
+			wantDate:   "2025-01-01T00:00:00Z",
+		},
+		{
+			name:        "pseudo-version fills only BuildDate when vcs.revision present",
+			startCommit: "",
+			startDate:   "",
+			mainVersion: "v0.0.0-20260506200756-4fd94246d2e2",
+			settings: []debug.BuildSetting{
+				{Key: "vcs.revision", Value: "deadbee"},
+			},
+			wantCommit: "deadbee",
+			wantDate:   "2026-05-06T20:07:56Z",
+		},
+		{
 			name:        "irrelevant settings ignored",
 			startCommit: "",
 			startDate:   "",
@@ -214,7 +265,9 @@ func TestApplyBuildInfo(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			withMetadata(t, "", tc.startCommit, "", "", tc.startDate, func() {
-				applyBuildInfo(&debug.BuildInfo{Settings: tc.settings})
+				info := &debug.BuildInfo{Settings: tc.settings}
+				info.Main.Version = tc.mainVersion
+				applyBuildInfo(info)
 				if GitCommit != tc.wantCommit {
 					t.Errorf("GitCommit = %q, want %q", GitCommit, tc.wantCommit)
 				}
@@ -222,6 +275,94 @@ func TestApplyBuildInfo(t *testing.T) {
 					t.Errorf("BuildDate = %q, want %q", BuildDate, tc.wantDate)
 				}
 			})
+		})
+	}
+}
+
+func TestParsePseudoVersion(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		wantCommit string
+		wantDate   string
+		wantOK     bool
+	}{
+		{
+			name:       "canonical v0.0.0 pseudo-version",
+			input:      "v0.0.0-20260506200756-4fd94246d2e2",
+			wantCommit: "4fd9424",
+			wantDate:   "2026-05-06T20:07:56Z",
+			wantOK:     true,
+		},
+		{
+			name:       "pre-release pseudo-version",
+			input:      "v0.1.1-0.20260506200756-4fd94246d2e2",
+			wantCommit: "4fd9424",
+			wantDate:   "2026-05-06T20:07:56Z",
+			wantOK:     true,
+		},
+		{
+			name:       "real semver tag is not a pseudo-version",
+			input:      "v0.1.0",
+			wantCommit: "",
+			wantDate:   "",
+			wantOK:     false,
+		},
+		{
+			name:       "real semver pre-release is not a pseudo-version",
+			input:      "v1.2.3-rc1",
+			wantCommit: "",
+			wantDate:   "",
+			wantOK:     false,
+		},
+		{
+			name:       "empty string",
+			input:      "",
+			wantCommit: "",
+			wantDate:   "",
+			wantOK:     false,
+		},
+		{
+			name:       "wrong-length commit suffix",
+			input:      "v0.0.0-20260506200756-4fd9424",
+			wantCommit: "",
+			wantDate:   "",
+			wantOK:     false,
+		},
+		{
+			name:       "wrong-length timestamp",
+			input:      "v0.0.0-2026050620075-4fd94246d2e2",
+			wantCommit: "",
+			wantDate:   "",
+			wantOK:     false,
+		},
+		{
+			name:       "non-hex commit",
+			input:      "v0.0.0-20260506200756-zzzzzzzzzzzz",
+			wantCommit: "",
+			wantDate:   "",
+			wantOK:     false,
+		},
+		{
+			name:       "invalid timestamp values",
+			input:      "v0.0.0-99999999999999-4fd94246d2e2",
+			wantCommit: "",
+			wantDate:   "",
+			wantOK:     false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			commit, date, ok := parsePseudoVersion(tc.input)
+			if ok != tc.wantOK {
+				t.Errorf("ok = %v, want %v", ok, tc.wantOK)
+			}
+			if commit != tc.wantCommit {
+				t.Errorf("commit = %q, want %q", commit, tc.wantCommit)
+			}
+			if date != tc.wantDate {
+				t.Errorf("date = %q, want %q", date, tc.wantDate)
+			}
 		})
 	}
 }
