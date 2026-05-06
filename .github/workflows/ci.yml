@@ -80,7 +80,11 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        # @v8 is the action release line that supports golangci-lint v2.x.
+        # The .golangci.yml in this repo uses the v2 config schema, so v2 is
+        # required. Also: golangci-lint v1.x is built with Go 1.24 and refuses
+        # to lint modules declaring go 1.25+ (the floor here is 1.25.3).
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.1.6
           args: --timeout=5m
