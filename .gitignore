@@ -33,5 +33,5 @@ go.work.sum
 
 # Project
 workbench
-assets/ai/go
+assets/ai
 .claude
