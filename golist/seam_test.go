@@ -10,7 +10,7 @@ import (
 
 // withSeam swaps the package-level runGoList for the duration of a
 // test, restoring the default afterward.
-func withSeam(t *testing.T, fn func(ctx context.Context, argv []string, dir string, env []string) runResult) {
+func withSeam(t *testing.T, fn func(_ context.Context, argv []string, dir string, env []string) runResult) {
 	t.Helper()
 	saved := runGoList
 	t.Cleanup(func() { runGoList = saved })
@@ -21,7 +21,7 @@ func withSeam(t *testing.T, fn func(ctx context.Context, argv []string, dir stri
 // 0 but its stdout was malformed" path inside Run. Drives the seam to
 // return success + bogus stdout.
 func TestRun_ParseErrorAfterSuccessfulExec(t *testing.T) {
-	withSeam(t, func(ctx context.Context, argv []string, dir string, env []string) runResult {
+	withSeam(t, func(_ context.Context, _ []string, _ string, _ []string) runResult {
 		return runResult{
 			stdout: bytes.NewReader([]byte(`{this is not valid json,,,}`)),
 			err:    nil,
@@ -47,7 +47,7 @@ func TestRun_ParseErrorAfterSuccessfulExec(t *testing.T) {
 // *exec.ExitError"). Drives the seam to return an arbitrary error.
 func TestRun_UnexpectedExecError(t *testing.T) {
 	synthetic := errors.New("permission denied / generic exec failure")
-	withSeam(t, func(ctx context.Context, argv []string, dir string, env []string) runResult {
+	withSeam(t, func(_ context.Context, _ []string, _ string, _ []string) runResult {
 		return runResult{stdout: nil, err: synthetic, stderr: "boom"}
 	})
 
@@ -75,7 +75,7 @@ func TestRun_SeamPropagatesArgsAndDir(t *testing.T) {
 		dir  string
 		env  []string
 	}
-	withSeam(t, func(ctx context.Context, argv []string, dir string, env []string) runResult {
+	withSeam(t, func(_ context.Context, argv []string, dir string, env []string) runResult {
 		captured.argv = append([]string(nil), argv...)
 		captured.dir = dir
 		captured.env = append([]string(nil), env...)

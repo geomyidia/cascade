@@ -102,8 +102,13 @@ var runGoList = defaultRunGoList
 // defaultRunGoList shells out to `go list` and captures stdout / stderr.
 // The single line that's not statement-coverable from in-process tests
 // is cmd.Run() — covered by Layer-2 subprocess tests instead.
+//
+// gosec G204 (subprocess from variable) is suppressed: argv[0] is the
+// goBin path (caller-controlled by design, via WithGoBin); argv[1:] is
+// constructed from caller-supplied tags/patterns, which is the entire
+// point of the API. The package documents this contract explicitly.
 func defaultRunGoList(ctx context.Context, argv []string, dir string, env []string) runResult {
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec
 	if dir != "" {
 		cmd.Dir = dir
 	}
