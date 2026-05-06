@@ -28,16 +28,18 @@ COVERAGE_THRESHOLD := 90
 # List of binaries to build and install (matches subdirectories under cmd/)
 BINARIES := cascade
 
-# ldflags for version injection (no-op for binaries that do not declare these vars)
-LDFLAGS_VERSION := -X 'main.Version=$(GIT_TAG)' \
-                   -X 'main.GitCommit=$(GIT_COMMIT)' \
-                   -X 'main.GitBranch=$(GIT_BRANCH)' \
-                   -X 'main.BuildTime=$(BUILD_TIME)'
+# ldflags for version injection (no-op for binaries that do not declare these vars).
+# No inner quoting: -X values never contain spaces (commit hashes, refs, ISO-8601 timestamps),
+# so the surrounding shell double-quotes in the recipe are sufficient.
+LDFLAGS_VERSION := -X main.Version=$(GIT_TAG) -X main.GitCommit=$(GIT_COMMIT) -X main.GitBranch=$(GIT_BRANCH) -X main.BuildTime=$(BUILD_TIME)
 
 # Release builds strip debug info and trim local paths for reproducibility
 LDFLAGS_RELEASE := -s -w $(LDFLAGS_VERSION)
-GOFLAGS_RELEASE := -trimpath -ldflags="$(LDFLAGS_RELEASE)"
-GOFLAGS_DEBUG   := -ldflags="$(LDFLAGS_VERSION)"
+GOFLAGS_RELEASE := -trimpath -ldflags "$(LDFLAGS_RELEASE)"
+GOFLAGS_DEBUG   := -ldflags "$(LDFLAGS_VERSION)"
+
+# Pick build flags by MODE; recursive (=) so build-release's MODE override is honored.
+GO_BUILD_FLAGS = $(if $(filter release,$(MODE)),$(GOFLAGS_RELEASE),$(GOFLAGS_DEBUG))
 
 # Git remotes to push to
 GIT_REMOTES := macpro github codeberg
@@ -73,7 +75,7 @@ help:
 	@echo "  $(YELLOW)make coverage-check$(RESET)   - Verify coverage meets $(COVERAGE_THRESHOLD)% threshold"
 	@echo "  $(YELLOW)make docs$(RESET)             - Serve godoc locally via pkgsite"
 	@echo "  $(YELLOW)make check$(RESET)            - Build + lint + test"
-	@echo "  $(YELLOW)make check-all$(RESET)        - Build + lint + coverage + docs"
+	@echo "  $(YELLOW)make check-all$(RESET)        - Build + lint + test + coverage gate"
 	@echo ""
 	@echo "$(GREEN)Dependencies:$(RESET)"
 	@echo "  $(YELLOW)make check-deps$(RESET)       - Check for outdated dependencies"
@@ -163,18 +165,13 @@ $(BIN_DIR):
 .PHONY: build
 build: clean $(BIN_DIR)
 	@echo "$(BLUE)Building $(PROJECT_NAME) in $(MODE) mode...$(RESET)"
-	@if [ "$(MODE)" = "release" ]; then \
-		GOFLAGS_BUILD='$(GOFLAGS_RELEASE)'; \
-	else \
-		GOFLAGS_BUILD='$(GOFLAGS_DEBUG)'; \
-	fi; \
-	for bin in $(BINARIES); do \
+	@for bin in $(BINARIES); do \
 		echo "$(CYAN)• Compiling cmd/$$bin...$(RESET)"; \
 		if [ ! -d ./cmd/$$bin ]; then \
 			echo "  $(YELLOW)⚠$(RESET) ./cmd/$$bin does not exist, skipping"; \
 			continue; \
 		fi; \
-		go build $$GOFLAGS_BUILD -o $(BIN_DIR)/$$bin ./cmd/$$bin && \
+		go build $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$$bin ./cmd/$$bin && \
 			echo "  $(GREEN)✓$(RESET) $$bin" || \
 			{ echo "  $(RED)✗$(RESET) $$bin failed to build"; exit 1; }; \
 	done
@@ -318,9 +315,9 @@ check: common-checks test
 	@echo ""
 
 .PHONY: check-all
-check-all: common-checks coverage-check docs
+check-all: common-checks coverage-check
 	@echo ""
-	@echo "$(GREEN)✓ Full validation complete (build + lint + coverage + docs)$(RESET)"
+	@echo "$(GREEN)✓ Full validation complete (build + lint + test + coverage gate)$(RESET)"
 	@echo ""
 
 .PHONY: check-deps

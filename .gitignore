@@ -35,3 +35,7 @@ go.work.sum
 workbench
 assets/ai
 .claude
+# Stray binaries at repo root (from `go build ./...` without -o).
+# Leading slash anchors to repo root only, so cmd/cascade/ stays tracked.
+/cascade
+/bin

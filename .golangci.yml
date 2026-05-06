@@ -1,0 +1,51 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck       # catches dropped errors (the gta failure mode in lint form)
+    - govet
+    - ineffassign    # catches ineffective assignments
+    - staticcheck    # SA-checks; high signal
+    - unused         # dead-code detection
+    - gosec          # security audit (we'll see how noisy this is; can disable rules per-line if needed)
+    - gocritic       # opinionated; readable Go patterns
+    - revive         # replacement for golint; configurable
+
+  settings:
+    errcheck:
+      # Errors from writing to stdout/stderr are virtually never actionable
+      # (if stdout is broken, you can't report the failure either). Suppress
+      # globally to avoid forcing `_, _ = fmt.Fprintf(...)` everywhere.
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+    revive:
+      rules:
+        - name: exported           # require doc comments on exported names
+        - name: package-comments   # require package-level doc comments
+        - name: var-naming
+        - name: error-return
+        - name: error-naming
+        - name: error-strings
+        - name: receiver-naming
+        - name: indent-error-flow
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: unused-parameter
+
+  exclusions:
+    rules:
+      # gosec's G204 (subprocess from variable) is a false positive in tests
+      # where the inputs are test-controlled constants and tempdir paths.
+      - path: _test\.go
+        linters:
+          - gosec
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
