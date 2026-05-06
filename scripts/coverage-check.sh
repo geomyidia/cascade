@@ -34,8 +34,9 @@ PACKAGES=(
     "github.com/geomyidia/cascade/golist"
     "github.com/geomyidia/cascade/depgraph"
     "github.com/geomyidia/cascade/changeset"
+    "github.com/geomyidia/cascade/util/version"
 )
-THRESHOLDS=(100 100 100)
+THRESHOLDS=(100 100 100 100)
 
 if [[ "${#PACKAGES[@]}" -ne "${#THRESHOLDS[@]}" ]]; then
     echo "::error::PACKAGES and THRESHOLDS arrays differ in length"

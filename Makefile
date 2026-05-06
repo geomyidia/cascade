@@ -14,11 +14,15 @@ CODE_NAME := "cascade"
 MODULE_PATH := github.com/geomyidia/cascade
 BIN_DIR := ./bin
 MODE := debug
+VERSION := $(shell cat VERSION 2>/dev/null || echo "unknown")
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-GIT_TAG := $(shell git describe --tags --always --dirty 2>/dev/null || echo "untagged")
-BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+GIT_SUMMARY := $(shell git describe --tags --dirty --always 2>/dev/null || echo "untagged")
+BUILD_DATE := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 GO_VERSION := $(shell go version 2>/dev/null | awk '{print $$3}' || echo "unknown")
+
+# Fully-qualified import path for the version package targeted by ldflags.
+VERSION_PKG := $(MODULE_PATH)/util/version
 
 # Coverage
 COVERAGE_FILE := coverage.out
@@ -28,10 +32,14 @@ COVERAGE_THRESHOLD := 90
 # List of binaries to build and install (matches subdirectories under cmd/)
 BINARIES := cascade
 
-# ldflags for version injection (no-op for binaries that do not declare these vars).
+# ldflags for version injection — populates the util/version package vars at link time.
 # No inner quoting: -X values never contain spaces (commit hashes, refs, ISO-8601 timestamps),
 # so the surrounding shell double-quotes in the recipe are sufficient.
-LDFLAGS_VERSION := -X main.Version=$(GIT_TAG) -X main.GitCommit=$(GIT_COMMIT) -X main.GitBranch=$(GIT_BRANCH) -X main.BuildTime=$(BUILD_TIME)
+LDFLAGS_VERSION := -X $(VERSION_PKG).Version=$(VERSION) \
+                   -X $(VERSION_PKG).GitCommit=$(GIT_COMMIT) \
+                   -X $(VERSION_PKG).GitBranch=$(GIT_BRANCH) \
+                   -X $(VERSION_PKG).GitSummary=$(GIT_SUMMARY) \
+                   -X $(VERSION_PKG).BuildDate=$(BUILD_DATE)
 
 # Release builds strip debug info and trim local paths for reproducibility
 LDFLAGS_RELEASE := -s -w $(LDFLAGS_VERSION)
@@ -99,7 +107,7 @@ help:
 	@echo "  $(YELLOW)make info$(RESET)             - Show build information"
 	@echo "  $(YELLOW)make check-tools$(RESET)      - Verify required tools are installed"
 	@echo ""
-	@echo "$(CYAN)Current status:$(RESET) Branch: $(GIT_BRANCH) | Commit: $(GIT_COMMIT) | Tag: $(GIT_TAG)"
+	@echo "$(CYAN)Current status:$(RESET) Branch: $(GIT_BRANCH) | Commit: $(GIT_COMMIT) | Tag: $(GIT_SUMMARY)"
 	@echo ""
 
 # Info target
@@ -114,7 +122,8 @@ info:
 	@echo "  Name:           $(PROJECT_NAME)"
 	@echo "  Module:         $(MODULE_PATH)"
 	@echo "  Build Mode:     $(MODE)"
-	@echo "  Build Time:     $(BUILD_TIME)"
+	@echo "  Version:        $(VERSION)"
+	@echo "  Build Date:     $(BUILD_DATE)"
 	@echo ""
 	@echo "$(GREEN)Paths:$(RESET)"
 	@echo "  Binary Dir:     $(BIN_DIR)/"
@@ -125,7 +134,7 @@ info:
 	@echo "$(GREEN)Git:$(RESET)"
 	@echo "  Branch:         $(GIT_BRANCH)"
 	@echo "  Commit:         $(GIT_COMMIT)"
-	@echo "  Tag:            $(GIT_TAG)"
+	@echo "  Summary:        $(GIT_SUMMARY)"
 	@echo ""
 	@echo "$(GREEN)Tools:$(RESET)"
 	@echo "  Go:             $(GO_VERSION)"

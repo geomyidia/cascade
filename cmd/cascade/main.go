@@ -8,16 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-)
 
-// Build-time metadata, populated via -ldflags. See Makefile for the canonical
-// injection. Defaults make `go run` and `go install` (without ldflags) still
-// produce sensible output.
-var (
-	Version   = "dev"
-	GitCommit = "unknown"
-	GitBranch = "unknown"
-	BuildTime = "unknown"
+	"github.com/geomyidia/cascade/util/version"
 )
 
 func main() {
@@ -48,8 +40,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if *showVersion {
-		fmt.Fprintf(stdout, "cascade %s (commit %s, branch %s, built %s)\n",
-			Version, GitCommit, GitBranch, BuildTime)
+		fmt.Fprintf(stdout, "cascade %s (build %s)\n",
+			version.VersionString(), version.BuildString())
 		return 0
 	}
 

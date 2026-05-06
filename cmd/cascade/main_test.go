@@ -22,10 +22,12 @@ func TestRun(t *testing.T) {
 		wantStderr string // substring; "" means stderr is unchecked
 	}{
 		{
+			// With no -ldflags injection in `go test`, the version package
+			// vars are empty and the helpers fall through to "N/A".
 			name:       "version flag",
 			args:       []string{"--version"},
 			wantCode:   0,
-			wantStdout: "cascade dev",
+			wantStdout: "cascade N/A (build N/A)",
 			wantStderr: "",
 		},
 		{
@@ -83,10 +85,11 @@ func TestRun(t *testing.T) {
 	}
 }
 
-// Layer 2: end-to-end smoke test. Builds the binary with ldflags injecting
-// known values, then exec's it with --version. Proves the build +
-// version-injection chain end-to-end. Skipped under -short because it
-// shells out to `go build` and is meaningfully slower than the unit tests.
+// Layer 2: end-to-end smoke test. Builds the binary with -ldflags injecting
+// known values into the util/version package, then exec's it with --version.
+// Proves the build + version-injection chain end-to-end. Skipped under -short
+// because it shells out to `go build` and is meaningfully slower than the
+// unit tests.
 
 func TestCascadeBinaryVersion(t *testing.T) {
 	if testing.Short() {
@@ -101,12 +104,19 @@ func TestCascadeBinaryVersion(t *testing.T) {
 	binPath := filepath.Join(tmp, binName)
 
 	const (
+		versionPkg      = "github.com/geomyidia/cascade/util/version"
 		injectedVersion = "test-1.0.0"
-		injectedCommit  = "abcdef"
+		injectedCommit  = "abcdef0"
+		injectedBranch  = "test-branch"
+		injectedDate    = "2026-05-06T18:30:00Z"
 	)
 
-	ldflags := "-X main.Version=" + injectedVersion +
-		" -X main.GitCommit=" + injectedCommit
+	ldflags := strings.Join([]string{
+		"-X " + versionPkg + ".Version=" + injectedVersion,
+		"-X " + versionPkg + ".GitCommit=" + injectedCommit,
+		"-X " + versionPkg + ".GitBranch=" + injectedBranch,
+		"-X " + versionPkg + ".BuildDate=" + injectedDate,
+	}, " ")
 
 	build := exec.Command("go", "build", "-o", binPath, "-ldflags", ldflags, ".")
 	build.Stderr = newPrefixWriter(t, "go build: ")
@@ -123,11 +133,15 @@ func TestCascadeBinaryVersion(t *testing.T) {
 	}
 
 	out := stdout.String()
-	if !strings.Contains(out, "cascade "+injectedVersion) {
-		t.Errorf("--version output missing injected Version: %q", out)
+	wantSubstrings := []string{
+		"cascade " + injectedVersion,
+		injectedBranch + "@" + injectedCommit,
+		injectedDate,
 	}
-	if !strings.Contains(out, "commit "+injectedCommit) {
-		t.Errorf("--version output missing injected GitCommit: %q", out)
+	for _, want := range wantSubstrings {
+		if !strings.Contains(out, want) {
+			t.Errorf("--version output missing %q\nfull output: %q", want, out)
+		}
 	}
 }
 
