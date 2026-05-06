@@ -143,8 +143,8 @@ The project name nods both to the operation (a change *cascading* through its re
 
 [logo]: assets/images/logo-v1.png
 [logo-large]: assets/images/logo-v1-large.png
-[build]: https://github.com/geomyidia/cascade/actions/workflows/cicd.yml
-[build-badge]: https://github.com/geomyidia/cascade/actions/workflows/cicd.yml/badge.svg
+[build]: https://github.com/geomyidia/cascade/actions/workflows/ci.yml
+[build-badge]: https://github.com/geomyidia/cascade/actions/workflows/ci.yml/badge.svg
 [tag-badge]: https://img.shields.io/github/tag/geomyidia/cascade.svg
 [tag]: https://github.com/geomyidia/cascade/tags
 [license]: LICENSE
