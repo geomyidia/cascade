@@ -163,7 +163,7 @@ Top-level: `concurrency: group: ${{ workflow }}-${{ ref }}, cancel-in-progress: 
 - Pointer to `assets/ai/CLAUDE-CODE-COVERAGE.md` for coverage discipline.
 - One-liner on Go-version policy: "CI matrix tracks Go's currently-supported major versions; expect the floor to advance with each Go release."
 
-**New file:** `CODE_OF_CONDUCT.md` — Contributor Covenant 2.1 verbatim, with `geomyidia` contact email substituted in. Ask the user for the contact email if not obvious.
+**New file:** `CODE_OF_CONDUCT.md` — Contributor Covenant 3.0 verbatim (https://www.contributor-covenant.org/version/3/0/code_of_conduct/code_of_conduct.md), with `geomyidia` contact email substituted in. Ask the user for the contact email if not obvious.
 
 **New file:** `SECURITY.md` — Vulnerability reporting policy. Direct reporters to GitHub's private vulnerability reporting (Settings → Security → Private vulnerability reporting). Note that cascade's attack surface is small (it shells out to `go list` + `git diff` and emits package paths) but the file should exist for convention.
 
