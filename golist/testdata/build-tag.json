@@ -1,0 +1,7 @@
+{
+  "ImportPath": "example.test/sample/pkgd",
+  "Dir": "/abs/path/sample/pkgd",
+  "GoFiles": ["pkgd_linux.go"],
+  "IgnoredGoFiles": ["pkgd_darwin.go"],
+  "Module": {"Path": "example.test/sample", "Main": true}
+}

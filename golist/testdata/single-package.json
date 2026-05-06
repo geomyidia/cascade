@@ -1,0 +1,10 @@
+{
+  "ImportPath": "example.test/sample/pkga",
+  "Dir": "/abs/path/sample/pkga",
+  "GoFiles": ["a.go"],
+  "Imports": ["fmt"],
+  "Module": {
+    "Path": "example.test/sample",
+    "Main": true
+  }
+}

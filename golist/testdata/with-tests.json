@@ -1,0 +1,11 @@
+{
+  "ImportPath": "example.test/sample/pkgc",
+  "Dir": "/abs/path/sample/pkgc",
+  "GoFiles": ["c.go"],
+  "TestGoFiles": ["c_test.go"],
+  "XTestGoFiles": ["c_xtest.go"],
+  "Imports": ["example.test/sample/pkgb"],
+  "TestImports": ["testing"],
+  "XTestImports": ["testing", "example.test/sample/pkga"],
+  "Module": {"Path": "example.test/sample", "Main": true}
+}

@@ -1,0 +1,20 @@
+{
+  "ImportPath": "example.test/sample/pkga",
+  "Dir": "/abs/path/sample/pkga",
+  "GoFiles": ["a.go"],
+  "Module": {"Path": "example.test/sample", "Main": true}
+}
+{
+  "ImportPath": "example.test/sample/pkgb",
+  "Dir": "/abs/path/sample/pkgb",
+  "GoFiles": ["b.go"],
+  "Imports": ["example.test/sample/pkga"],
+  "Module": {"Path": "example.test/sample", "Main": true}
+}
+{
+  "ImportPath": "example.test/sample/pkgc",
+  "Dir": "/abs/path/sample/pkgc",
+  "GoFiles": ["c.go"],
+  "Imports": ["example.test/sample/pkgb", "fmt"],
+  "Module": {"Path": "example.test/sample", "Main": true}
+}

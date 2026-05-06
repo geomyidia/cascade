@@ -1,0 +1,19 @@
+{
+  "ImportPath": "fmt",
+  "Dir": "/usr/local/go/src/fmt",
+  "GoFiles": ["doc.go", "errors.go", "format.go", "print.go", "scan.go"],
+  "Standard": true
+}
+{
+  "ImportPath": "example.test/sample/pkga",
+  "Dir": "/abs/path/sample/pkga",
+  "GoFiles": ["a.go"],
+  "Imports": ["fmt"],
+  "Module": {"Path": "example.test/sample", "Main": true}
+}
+{
+  "ImportPath": "errors",
+  "Dir": "/usr/local/go/src/errors",
+  "GoFiles": ["errors.go", "wrap.go"],
+  "Standard": true
+}
