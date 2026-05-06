@@ -165,6 +165,14 @@ check-tools:
 	@command -v git >/dev/null 2>&1 && echo "$(GREEN)✓ git found$(RESET)" || echo "$(RED)✗ git not found$(RESET)"
 	@test -f go.mod && echo "$(GREEN)✓ go.mod found$(RESET)" || echo "$(RED)✗ go.mod not found$(RESET)"
 
+# One-time local git setup: extends reflog longevity, points
+# core.hooksPath at scripts/hooks (so the version-controlled pre-push
+# hook becomes active). Idempotent; safe to re-run. See CLAUDE.md
+# §"Git Safety Protocol" for the protocol this backstops.
+.PHONY: setup-git
+setup-git:
+	@bash scripts/setup-git.sh
+
 # Build directory creation
 $(BIN_DIR):
 	@echo "$(BLUE)Creating bin directory...$(RESET)"

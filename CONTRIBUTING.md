@@ -7,12 +7,17 @@ Contributions are welcome. This document describes the conventions you'll need t
 ## Development setup
 
 ```bash
+# One-time local git setup (recommended after every fresh clone).
+make setup-git
+
 # Confirm your toolchain
 make check-tools
 
 # Build, lint, test
 make check
 ```
+
+`make setup-git` applies the local-only git config the project relies on for safety backstops: extends reflog longevity to 90 days for unreachable refs / 365 days for reachable, and points `core.hooksPath` at the version-controlled hooks under `scripts/hooks/` (currently a `pre-push` that refuses non-fast-forward and deletion pushes to `main`). The script is idempotent. See [`CLAUDE.md`'s "Git Safety Protocol" section](./CLAUDE.md) for the protocol these technical backstops support.
 
 `make check-tools` will tell you which tools are installed and which need installing (`gofmt`, `goimports`, `golangci-lint`, `pkgsite`). All are optional except Go itself; missing tools degrade specific Make targets gracefully.
 

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Pre-push hook: refuse destructive pushes to main.
+#
+# Activated via `git config core.hooksPath scripts/hooks` (handled by
+# scripts/setup-git.sh). Runs locally before every `git push`; receives
+# one stdin line per ref being pushed, in the format:
+#
+#   <local-ref> <local-sha> <remote-ref> <remote-sha>
+#
+# This hook refuses two specific cases on `main`:
+#   1. Deletion (local-sha is the all-zeros sha)
+#   2. Non-fast-forward (remote-sha is not an ancestor of local-sha)
+#
+# The all-other-cases default is to allow the push. Pushes to non-main
+# refs (feature branches, tags, etc.) are unaffected.
+#
+# Escape hatch: a maintainer with a legitimate need to force-push (e.g.,
+# to remove an accidentally-committed secret) can use `git push --no-verify`
+# to bypass this hook. That bypass is intentional but should be exceptionally
+# rare; the routine answer to a non-fast-forward situation on main is
+# "branch the divergent work off and merge via PR", not "force-push."
+#
+# Pairs with CLAUDE.md's "Git Safety Protocol" section. Bash 3.2 compatible.
+
+set -euo pipefail
+
+protected="refs/heads/main"
+zero="0000000000000000000000000000000000000000"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    if [ "$remote_ref" != "$protected" ]; then
+        continue
+    fi
+
+    # Refuse to delete main (local_sha == zero means "delete the remote ref").
+    if [ "$local_sha" = "$zero" ]; then
+        echo "::pre-push:: refusing to delete $protected" >&2
+        echo "::pre-push:: this would remove main from the remote" >&2
+        exit 1
+    fi
+
+    # Refuse non-fast-forward pushes when the remote ref already exists
+    # (remote_sha != zero). A fast-forward means remote_sha is an ancestor
+    # of local_sha; anything else either drops commits (force-push) or
+    # represents a wholly different history (catastrophic mistake).
+    if [ "$remote_sha" != "$zero" ]; then
+        if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+            echo "::pre-push:: refusing non-fast-forward push to $protected" >&2
+            echo "::pre-push:: remote $remote_sha is not an ancestor of local $local_sha" >&2
+            echo "::pre-push:: this would drop commits reachable from $remote_sha" >&2
+            echo "::pre-push:: if you really mean it, push with --no-verify (rare)" >&2
+            exit 1
+        fi
+    fi
+done
+
+exit 0

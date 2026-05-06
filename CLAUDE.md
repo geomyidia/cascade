@@ -34,6 +34,16 @@ The mature-field discipline this approximates has the recorder of a defect struc
 - **Quality over elapsed time on the thinking path.** Do not trade thinking quality for wall-clock speed. On the lookup path, parallelism is welcome.
 - **Phrasing to follow when planning a task:** *"I will do X thinking/edit work in this context; I may delegate Y lookup if useful."* Both sides explicit. Do not forbid all subagent use (hurts lookup parallelism). Do not leave the line implicit (it won't hold).
 
+### Git Safety Protocol
+
+**Work mode — destructive git operations.**
+
+- **Never run destructive git operations on `main` or any tracking branch without explicit per-occurrence confirmation in chat.** The destructive set: `git reset --hard <ref>`, `git push --force` and `--force-with-lease`, `git clean -fd`, `git branch -D`, `git checkout -- .`, `git restore .`, `git stash drop`, `git rebase -i` with drop/squash on already-pushed commits, `git rm -rf` against tracked files. None of these have a built-in "are you sure?" prompt; all of them can silently destroy work.
+- **CC works on feature branches only.** Branch off `main` at the start of a milestone; commits land on the feature branch; the only way to update `main` is via a merged PR. CC never `git checkout main && commit`. CC never `git checkout main && reset`. If CC finds itself on `main` with uncommitted work, the protocol is: `stash` → branch off → `stash pop`.
+- **Preservation is the default when state is unexpected.** If `git status` shows a state CC doesn't fully understand — local ahead of origin, unexpected files in the working tree, an unrecognised stash, a detached HEAD, anything that wasn't an explicit consequence of the last few CC operations — *stop and ask*. The non-destructive resolutions almost always exist (push to a backup branch, create a recovery branch from HEAD, ask the user what those commits represent). Reaching for a destructive resolution because "the divergence looks wrong" is the failure mode this protocol exists to prevent.
+- **The reflog is a backstop, not a license.** The repo's local `.git/config` extends reflog longevity (90 days unreachable / 365 days reachable; see `scripts/setup-git.sh`). That's a recovery window for when something goes wrong despite the protocol — *not* permission to skip it. There is also a pre-push hook at `scripts/hooks/pre-push` that refuses non-fast-forward and deletion pushes to `main`; that's another backstop, not permission.
+- **Phrasing to follow when planning a destructive operation:** if any operation in the destructive set above is in the plan, name it and wait — *"Next step: I'm about to run `git reset --hard origin/main` to undo my last three local commits. OK?"* — and pause until confirmed. Do not bury the destructive command inside a chain of operations; do not assume an earlier "go ahead" extends to a new destructive step.
+
 ## Common commands
 
 The `Makefile` is the canonical menu. `make help` prints the full list with descriptions. Frequently used:
