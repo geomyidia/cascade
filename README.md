@@ -105,8 +105,8 @@ Every step is small, typed, and tested. The only io is the two `os/exec` calls i
 | | Milestone | Status |
 |---|---|---|
 | M1 | Repo scaffold + CI baseline | completed |
-| M2 | `go list` adapter (shell-out + streaming JSON parser) | in progress |
-| M3 | Dep graph + reverse-dep index + closure | not started |
+| M2 | `go list` adapter (shell-out + streaming JSON parser) | completed |
+| M3 | Dep graph + reverse-dep index + closure | in progress |
 | M4 | Changed-files-to-packages mapping | not started |
 | M5 | CLI + main wiring | not started |
 | M6 | `v0.1.0` release | not started |
