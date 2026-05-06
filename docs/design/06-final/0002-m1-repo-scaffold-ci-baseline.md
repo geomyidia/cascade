@@ -6,7 +6,7 @@ component: All
 tags: [m1, scaffold, ci, github-actions, makefile, branch-protection, golangci-lint]
 created: 2026-05-06
 updated: 2026-05-06
-state: Active
+state: Final
 supersedes: null
 superseded-by: null
 version: 1.0

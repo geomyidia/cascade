@@ -1,12 +1,12 @@
 ---
 number: 3
-title: "cascade — M2: `golist` Adapter"
+title: "M2: `golist` Adapter"
 author: "these patterns"
 component: All
 tags: [change-me]
 created: 2026-05-06
 updated: 2026-05-06
-state: Active
+state: Final
 supersedes: null
 superseded-by: null
 version: 1.0
@@ -109,10 +109,12 @@ type Module struct {
 ```
 
 **Decided:**
+
 - `Module` is a pointer-to-struct rather than embedded value. `nil` cleanly represents "stdlib, no module" without needing a sentinel string.
 - `Standard` is captured even though it duplicates information available via `Module == nil`, because downstream code reads `pkg.Standard` more naturally than `pkg.Module == nil`.
 
 **Not exposed in M2** (deliberately deferred):
+
 - `CgoFiles`, `SFiles`, `EmbedFiles`, etc. — non-Go source variants. Cascade doesn't compute affected sets from these in M3/M4. Adding later is non-breaking.
 - `Deps` (transitive deps as a flat list) — `go list -deps` already gives us each transitive dep as a separate Package entry, so we don't need the flat list.
 - `BuildID`, `Stale`, `Target` — build-system metadata not needed for affected-set computation.
@@ -149,6 +151,7 @@ func Run(ctx context.Context, tags []string, patterns []string, opts ...Option) 
 ```
 
 **Decided:**
+
 - `tags` is `[]string`, not `string`. Caller-side typing wins over implementation convenience.
 - `patterns` is `[]string`. Common case is `[]string{"./..."}`; multi-pattern queries are real (e.g., `cmd/foo/... ./internal/...`) so we accept a slice.
 - Context is the first parameter (per Go convention; per AP-08 in `go-guidelines/09-anti-patterns.md`).
@@ -177,6 +180,7 @@ func WithGoBin(bin string) Option
 ```
 
 **Decided:**
+
 - Functional options over a `Config` struct (per API-41 in `go-guidelines/02-api-design.md`). Future options don't break the signature.
 - `WithDir` is the most likely option in practice (CI invocations frequently want to run from a specific module root).
 - `runConfig` is unexported; callers compose configuration only via `Option` constructors.
@@ -228,6 +232,7 @@ const ParseErrorMaxPayload = 4096
 ```
 
 **Decided:**
+
 - Both typed errors implement `Is` for sentinel matching and `Unwrap` for chain traversal. Callers can use either form.
 - `ExitError.Stderr` is captured verbatim, not truncated. `go list`'s stderr on real failures (`go: updates to go.mod needed`, etc.) is small and the diagnostic value is high.
 - `ParseError.Payload` is truncated at 4KB to cap memory in pathological cases. The exported `ParseErrorMaxPayload` constant lets callers know what to expect.
@@ -274,6 +279,7 @@ A single end-to-end test, `TestRun_SampleModule`, that:
 4. Asserts the returned slice has the expected packages with the expected imports.
 
 The sample module lives at `golist/testdata/sample-module/` and contains:
+
 - `go.mod` declaring `module example.test/sample` (a name that cannot collide with cascade or any real module).
 - `pkga/a.go` (package pkga, no imports).
 - `pkgb/b.go` (package pkgb, imports pkga).
