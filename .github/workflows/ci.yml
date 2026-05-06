@@ -86,5 +86,9 @@ jobs:
         # to lint modules declaring go 1.25+ (the floor here is 1.25.3).
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.1.6
+          # v2.11.4 is built with go1.26.1, satisfying the go.mod 1.25.3 floor.
+          # Earlier v2.x releases (e.g. v2.1.6) were built with go1.24 and
+          # refuse to lint a module declaring go 1.25+. Bumping the floor
+          # again later may require a newer pin.
+          version: v2.11.4
           args: --timeout=5m
