@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/geomyidia/cascade/project"
 )
 
 // Layer 1: in-process unit tests of run(). These own the package's
@@ -14,6 +16,20 @@ import (
 // green in M1 with no implementation in golist/depgraph/changeset yet.
 
 func TestRun(t *testing.T) {
+	// The project package's init() populates Version from the embedded
+	// VERSION file and may populate GitCommit/BuildDate from ReadBuildInfo,
+	// so the test binary inherits real metadata. Reset the build-info vars
+	// for the duration of TestRun so the "no-metadata in scope yields N/A
+	// output" assertion remains a strong signal — and restore via Cleanup.
+	saveVersion, saveCommit, saveBranch, saveSummary, saveDate :=
+		project.Version, project.GitCommit, project.GitBranch, project.GitSummary, project.BuildDate
+	t.Cleanup(func() {
+		project.Version, project.GitCommit, project.GitBranch, project.GitSummary, project.BuildDate =
+			saveVersion, saveCommit, saveBranch, saveSummary, saveDate
+	})
+	project.Version, project.GitCommit, project.GitBranch, project.GitSummary, project.BuildDate =
+		"", "", "", "", ""
+
 	tests := []struct {
 		name       string
 		args       []string

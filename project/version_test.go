@@ -3,6 +3,7 @@ package project
 import (
 	"bytes"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"testing"
 )
@@ -66,6 +67,204 @@ func TestBuildString(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestLoadDefaults(t *testing.T) {
+	embedded := strings.TrimSpace(versionFile)
+	if embedded == "" {
+		t.Fatalf("embedded VERSION file is empty; this should not happen in a checked-out repo")
+	}
+
+	tests := []struct {
+		name              string
+		startVersion      string
+		startCommit       string
+		startBranch       string
+		startDate         string
+		wantVersionPrefix string // prefix-match (Version may be the embedded value)
+		wantCommitEmpty   bool   // whether GitCommit should remain empty after loadDefaults
+		wantDateEmpty     bool
+	}{
+		{
+			name:              "embed-fills-empty-Version",
+			startVersion:      "",
+			startCommit:       "abcdef0", // non-empty so ReadBuildInfo doesn't run
+			startBranch:       "",
+			startDate:         "2026-01-01T00:00:00Z", // non-empty so ReadBuildInfo doesn't run
+			wantVersionPrefix: embedded,
+			wantCommitEmpty:   false,
+			wantDateEmpty:     false,
+		},
+		{
+			name:              "ldflags-Version-takes-precedence",
+			startVersion:      "9.9.9-fromldflags",
+			startCommit:       "abcdef0",
+			startBranch:       "",
+			startDate:         "2026-01-01T00:00:00Z",
+			wantVersionPrefix: "9.9.9-fromldflags",
+			wantCommitEmpty:   false,
+			wantDateEmpty:     false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			withMetadata(t, tc.startVersion, tc.startCommit, tc.startBranch, "", tc.startDate, func() {
+				loadDefaults()
+				if Version != tc.wantVersionPrefix {
+					t.Errorf("Version = %q, want %q", Version, tc.wantVersionPrefix)
+				}
+				if tc.wantCommitEmpty && GitCommit != "" {
+					t.Errorf("GitCommit = %q, want empty", GitCommit)
+				}
+				if tc.wantDateEmpty && BuildDate != "" {
+					t.Errorf("BuildDate = %q, want empty", BuildDate)
+				}
+			})
+		})
+	}
+}
+
+func TestApplyBuildInfo(t *testing.T) {
+	tests := []struct {
+		name        string
+		startCommit string
+		startDate   string
+		settings    []debug.BuildSetting
+		wantCommit  string
+		wantDate    string
+	}{
+		{
+			name:        "long revision truncated to 7 chars",
+			startCommit: "",
+			startDate:   "",
+			settings: []debug.BuildSetting{
+				{Key: "vcs.revision", Value: "abcdef0123456789"},
+				{Key: "vcs.modified", Value: "false"},
+				{Key: "vcs.time", Value: "2026-05-06T18:30:00Z"},
+			},
+			wantCommit: "abcdef0",
+			wantDate:   "2026-05-06T18:30:00Z",
+		},
+		{
+			name:        "modified true appends -dirty",
+			startCommit: "",
+			startDate:   "",
+			settings: []debug.BuildSetting{
+				{Key: "vcs.revision", Value: "abcdef0123456789"},
+				{Key: "vcs.modified", Value: "true"},
+				{Key: "vcs.time", Value: "2026-05-06T18:30:00Z"},
+			},
+			wantCommit: "abcdef0-dirty",
+			wantDate:   "2026-05-06T18:30:00Z",
+		},
+		{
+			name:        "short revision passes through",
+			startCommit: "",
+			startDate:   "",
+			settings: []debug.BuildSetting{
+				{Key: "vcs.revision", Value: "abc"},
+				{Key: "vcs.modified", Value: "false"},
+			},
+			wantCommit: "abc",
+			wantDate:   "",
+		},
+		{
+			name:        "all settings empty is a no-op",
+			startCommit: "",
+			startDate:   "",
+			settings:    nil,
+			wantCommit:  "",
+			wantDate:    "",
+		},
+		{
+			name:        "ldflags-set GitCommit is preserved",
+			startCommit: "preset-commit",
+			startDate:   "",
+			settings: []debug.BuildSetting{
+				{Key: "vcs.revision", Value: "abcdef0123456789"},
+				{Key: "vcs.modified", Value: "true"},
+			},
+			wantCommit: "preset-commit",
+			wantDate:   "",
+		},
+		{
+			name:        "ldflags-set BuildDate is preserved",
+			startCommit: "",
+			startDate:   "preset-date",
+			settings: []debug.BuildSetting{
+				{Key: "vcs.revision", Value: "abcdef0"},
+				{Key: "vcs.time", Value: "2026-05-06T18:30:00Z"},
+			},
+			wantCommit: "abcdef0",
+			wantDate:   "preset-date",
+		},
+		{
+			name:        "irrelevant settings ignored",
+			startCommit: "",
+			startDate:   "",
+			settings: []debug.BuildSetting{
+				{Key: "GOOS", Value: "linux"},
+				{Key: "GOARCH", Value: "amd64"},
+				{Key: "vcs", Value: "git"},
+			},
+			wantCommit: "",
+			wantDate:   "",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			withMetadata(t, "", tc.startCommit, "", "", tc.startDate, func() {
+				applyBuildInfo(&debug.BuildInfo{Settings: tc.settings})
+				if GitCommit != tc.wantCommit {
+					t.Errorf("GitCommit = %q, want %q", GitCommit, tc.wantCommit)
+				}
+				if BuildDate != tc.wantDate {
+					t.Errorf("BuildDate = %q, want %q", BuildDate, tc.wantDate)
+				}
+			})
+		})
+	}
+}
+
+// TestReadBuildInfoFallback exercises the wrapper around debug.ReadBuildInfo.
+// Drives both ok=true and ok=false branches via the readBuildInfo seam.
+func TestReadBuildInfoFallback(t *testing.T) {
+	t.Run("ok=false is a no-op", func(t *testing.T) {
+		saveFn := readBuildInfo
+		t.Cleanup(func() { readBuildInfo = saveFn })
+		readBuildInfo = func() (*debug.BuildInfo, bool) { return nil, false }
+
+		withMetadata(t, "", "", "", "", "", func() {
+			readBuildInfoFallback()
+			if GitCommit != "" || BuildDate != "" {
+				t.Errorf("unexpected mutation: GitCommit=%q BuildDate=%q", GitCommit, BuildDate)
+			}
+		})
+	})
+
+	t.Run("ok=true delegates to applyBuildInfo", func(t *testing.T) {
+		saveFn := readBuildInfo
+		t.Cleanup(func() { readBuildInfo = saveFn })
+		readBuildInfo = func() (*debug.BuildInfo, bool) {
+			return &debug.BuildInfo{
+				Settings: []debug.BuildSetting{
+					{Key: "vcs.revision", Value: "abcdef0123456"},
+					{Key: "vcs.modified", Value: "false"},
+					{Key: "vcs.time", Value: "2026-05-06T18:30:00Z"},
+				},
+			}, true
+		}
+
+		withMetadata(t, "", "", "", "", "", func() {
+			readBuildInfoFallback()
+			if GitCommit != "abcdef0" {
+				t.Errorf("GitCommit = %q, want %q", GitCommit, "abcdef0")
+			}
+			if BuildDate != "2026-05-06T18:30:00Z" {
+				t.Errorf("BuildDate = %q, want %q", BuildDate, "2026-05-06T18:30:00Z")
+			}
+		})
+	})
 }
 
 func TestPrintVersions(t *testing.T) {

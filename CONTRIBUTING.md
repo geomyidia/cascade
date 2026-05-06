@@ -51,6 +51,14 @@ If a future change adds a new public package (sibling to `golist/`, `depgraph/`,
 
 CI's matrix tracks Go's currently-supported major versions (the two newest releases). Expect the floor in `go.mod` to advance with each new Go release.
 
+## Versioning
+
+The canonical version source is **`project/VERSION`** — a single file containing the module version (e.g. `0.1.0`). Bumping cascade is a one-file edit. The repo root has a `./VERSION` symlink pointing at `project/VERSION` for convenience (`cat VERSION` from the repo top still works).
+
+Why inside `project/`? Go's `//go:embed` directive cannot reach files outside the package directory tree, so the canonical file lives next to the code that embeds it. The Makefile reads `project/VERSION` and injects the value into `project.Version` via `-ldflags` for full builds. Plain `go install` (no ldflags) gets the same value via the embedded file. Both paths converge on the same source of truth.
+
+**Note for Windows contributors:** git on Windows treats symlinks as text files unless `core.symlinks = true` is set. If `./VERSION` shows up as plain text on your checkout, either set that config or read `project/VERSION` directly — the Makefile already does.
+
 ## Reporting issues
 
 - **Bugs:** use the bug-report template.
