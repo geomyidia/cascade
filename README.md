@@ -61,7 +61,7 @@ git diff --name-only origin/main..HEAD | cascade --changed-files=-
 | `--base` | (required unless `--changed-files`) | Base git ref (e.g. `origin/main`); cascade runs `git diff --name-only <base>..<head>` to derive the change-set. |
 | `--head` | `HEAD` | Head git ref. |
 | `--changed-files` | (none) | Path to a file with one change-set entry per line. `-` reads from stdin. When set, `--base` is not required and `git diff` is not invoked. |
-| `--root` | `.` | Working directory for `go list` and module-root for `changeset.Resolve`. |
+| `--root` | `.` | Working directory for `go list` and module-root for `changeset.Resolve`. Absolute or relative; cascade absolutizes via `filepath.Abs` before use, so the default `.` resolves to the process cwd. |
 | `--version` | false | Print `cascade <Version> (build <Branch>@<Commit>, <BuildDate>)` and exit. (Branch is empty for `go install` builds — the module proxy doesn't carry branch metadata.) |
 | `--help` | false | Print usage and exit. Routes to stdout per GNU convention; flag-parse errors route help to stderr per stdlib `flag` default. |
 
