@@ -1,7 +1,7 @@
 # M3 Implementation Retrospective: `depgraph` (Reverse-Dep Closure)
 
 **Status:** closing report; awaiting CDC verification.
-**Closing commit:** _TBD_ (head of `m3/depgraph-closure` at PR open).
+**Closing commit:** `835b4b0` (head of `m3/depgraph-closure` at close; M3 PR head). Merge OID lands here when rebase-merge to `main` completes.
 **CDC verification:** pending.
 **Source spec:** [`docs/design/05-active/0004-cascade-m3-depgraph-reverse-dep-closure.md`](../design/05-active/0004-cascade-m3-depgraph-reverse-dep-closure.md). Anticipated to transition 05-active → 06-final post-merge.
 **Source impl plan:** [`docs/dev/0005-m3-implementation-plan-depgraph-reverse-dep-closure.md`](./0005-m3-implementation-plan-depgraph-reverse-dep-closure.md).
