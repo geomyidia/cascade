@@ -272,6 +272,13 @@ All six questions resolved during plan-mode review prior to M4 implementation. R
 
 6. **Closing-report evidence for F-13 (godoc rendering).** **Resolved:** full `go doc` output capped at first 20 lines — followed the spec's lean. Consistent with the verify command.
 
+## Version history
+
+| Version | Date | Author | Change |
+|---------|------|--------|--------|
+| 1.0 | 2026-05-07 | Duncan McGreggor (with CC) | Initial active spec. Specced `Resolve` as a single positional-parameter function with no exported types and no io. Six open questions left for plan-mode review. |
+| 1.1 | 2026-05-07 | Duncan McGreggor (with CC) | Folded the M4 plan-mode resolutions into the spec body. Public API surface gains an `Option` type and a `WithModuleRoot` constructor (Q1 user override of the positional lean). `Resolve` signature changes to `(changedFiles []string, pkgs []golist.Package, opts ...Option) []string`. Q2 resolution introduces a single `os.Getwd` fallback when `WithModuleRoot` is not supplied, hooked through an internal `getCwd` function-variable seam (mirrors M2's `runGoList` pattern). Q5 mapping rule for `IgnoredGoFiles` clarified as "map regardless" (followed spec lean, confirmed by maintainer). F-2 ledger row's verify command updated to grep for the functional-option signature. Open questions section retitled "Open questions (resolved)" with each Q1-Q6 marked resolved. Risks section gains an entry for the `os.Getwd` io edge with the seam pattern as the named mitigation. No behavioural drift from 1.0's contractual rules — same mapping rules, same dedup, same sort, same no-error contract. Implementation in commits `75617a2` (M4 implementation) and `f78dcb9` (M4 closing retrospective); spec amendment in commit `9e92a95`. |
+
 ## Cross-references
 
 - Parent plan: [`0001-cascade-high-level-project-plan.md`](./0001-cascade-high-level-project-plan.md), §"M4 — Changed-files-to-packages mapping".
