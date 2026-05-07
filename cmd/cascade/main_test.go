@@ -7,140 +7,24 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/geomyidia/cascade/internal/project"
 )
 
-// Layer 1: in-process unit tests of run(). These own the package's
-// statement coverage so make coverage-check (90% Makefile gate) stays
-// green in M1 with no implementation in golist/depgraph/changeset yet.
+// Layer 2 — end-to-end binary tests. M1's in-process unit tests of run()
+// retired in M5: the orchestration moved to internal/cli (Run is testable
+// in-process there with full coverage). These binary tests verify the
+// build → exec → wire chain end-to-end against the real binary.
 
-func TestRun(t *testing.T) {
-	// The project package's init() populates Version from the embedded
-	// VERSION file and may populate GitCommit/BuildDate from ReadBuildInfo,
-	// so the test binary inherits real metadata. Reset the build-info vars
-	// for the duration of TestRun so the "no-metadata in scope yields N/A
-	// output" assertion remains a strong signal — and restore via Cleanup.
-	saveVersion, saveCommit, saveBranch, saveSummary, saveDate :=
-		project.Version, project.GitCommit, project.GitBranch, project.GitSummary, project.BuildDate
-	t.Cleanup(func() {
-		project.Version, project.GitCommit, project.GitBranch, project.GitSummary, project.BuildDate =
-			saveVersion, saveCommit, saveBranch, saveSummary, saveDate
-	})
-	project.Version, project.GitCommit, project.GitBranch, project.GitSummary, project.BuildDate =
-		"", "", "", "", ""
-
-	tests := []struct {
-		name       string
-		args       []string
-		wantCode   int
-		wantStdout string // substring; "" means stdout must be empty
-		wantStderr string // substring; "" means stderr is unchecked
-	}{
-		{
-			// With no -ldflags injection in `go test`, the version package
-			// vars are empty and the helpers fall through to "N/A".
-			name:       "version flag",
-			args:       []string{"--version"},
-			wantCode:   0,
-			wantStdout: "cascade N/A (build N/A)",
-			wantStderr: "",
-		},
-		{
-			name:       "help flag",
-			args:       []string{"--help"},
-			wantCode:   0,
-			wantStdout: "",
-			wantStderr: "Usage of cascade",
-		},
-		{
-			name:       "flag parse error",
-			args:       []string{"--bogus"},
-			wantCode:   1,
-			wantStdout: "",
-			wantStderr: "flag provided but not defined",
-		},
-		{
-			name:       "no flags",
-			args:       []string{},
-			wantCode:   2,
-			wantStdout: "",
-			wantStderr: "not yet implemented",
-		},
-		{
-			name:       "unexpected positional argument",
-			args:       []string{"surprise"},
-			wantCode:   2,
-			wantStdout: "",
-			wantStderr: `unexpected argument "surprise"`,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-			got := run(tc.args, &stdout, &stderr)
-
-			if got != tc.wantCode {
-				t.Errorf("run(%v) exit = %d, want %d\nstdout: %q\nstderr: %q",
-					tc.args, got, tc.wantCode, stdout.String(), stderr.String())
-			}
-			if tc.wantStdout == "" {
-				if stdout.Len() != 0 {
-					t.Errorf("run(%v) wrote unexpected stdout: %q", tc.args, stdout.String())
-				}
-			} else if !strings.Contains(stdout.String(), tc.wantStdout) {
-				t.Errorf("run(%v) stdout = %q, want substring %q",
-					tc.args, stdout.String(), tc.wantStdout)
-			}
-			if tc.wantStderr != "" && !strings.Contains(stderr.String(), tc.wantStderr) {
-				t.Errorf("run(%v) stderr = %q, want substring %q",
-					tc.args, stderr.String(), tc.wantStderr)
-			}
-		})
-	}
-}
-
-// Layer 2: end-to-end smoke test. Builds the binary with -ldflags injecting
-// known values into the project package, then exec's it with --version.
-// Proves the build + version-injection chain end-to-end. Skipped under -short
-// because it shells out to `go build` and is meaningfully slower than the
-// unit tests.
-
+// TestCascadeBinaryVersion (F-16) is the M1 carry-over: builds the cascade
+// binary with -ldflags injecting known version metadata, then exec's it
+// with --version to verify the injection chain. Skipped under -short.
 func TestCascadeBinaryVersion(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping end-to-end binary test in short mode")
 	}
 
-	tmp := t.TempDir()
-	binName := "cascade"
-	if runtime.GOOS == "windows" {
-		binName += ".exe"
-	}
-	binPath := filepath.Join(tmp, binName)
+	binPath := buildTestBinary(t)
 
-	const (
-		versionPkg      = "github.com/geomyidia/cascade/internal/project"
-		injectedVersion = "test-1.0.0"
-		injectedCommit  = "abcdef0"
-		injectedBranch  = "test-branch"
-		injectedDate    = "2026-05-06T18:30:00Z"
-	)
-
-	ldflags := strings.Join([]string{
-		"-X " + versionPkg + ".Version=" + injectedVersion,
-		"-X " + versionPkg + ".GitCommit=" + injectedCommit,
-		"-X " + versionPkg + ".GitBranch=" + injectedBranch,
-		"-X " + versionPkg + ".BuildDate=" + injectedDate,
-	}, " ")
-
-	build := exec.Command("go", "build", "-o", binPath, "-ldflags", ldflags, ".")
-	build.Stderr = newPrefixWriter(t, "go build: ")
-	if err := build.Run(); err != nil {
-		t.Fatalf("go build failed: %v", err)
-	}
-
-	cmd := exec.Command(binPath, "--version")
+	cmd := exec.Command(binPath, "--version") //nolint:gosec
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -160,6 +44,137 @@ func TestCascadeBinaryVersion(t *testing.T) {
 		}
 	}
 }
+
+// TestCascadeBinaryHelp (F-15) verifies the binary's --help output contains
+// the full flag reference and exit-code table on stdout.
+func TestCascadeBinaryHelp(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping end-to-end binary test in short mode")
+	}
+
+	binPath := buildTestBinary(t)
+
+	cmd := exec.Command(binPath, "--help") //nolint:gosec
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("running %s --help failed: %v\nstderr: %s", binPath, err, stderr.String())
+	}
+
+	out := stdout.String()
+	wantSubstrings := []string{
+		"cascade",
+		"--base",
+		"--head",
+		"--tags",
+		"--changed-files",
+		"--root",
+		"--version",
+		"--help",
+		"Exit codes",
+		"git diff failed",
+		"go list failed",
+		"cancelled or interrupted",
+	}
+	for _, want := range wantSubstrings {
+		if !strings.Contains(out, want) {
+			t.Errorf("--help stdout missing %q", want)
+		}
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("--help should not write to stderr; got: %q", stderr.String())
+	}
+}
+
+// TestCascadeBinaryEndToEnd (F-17) drives the full pipeline against the
+// pkg/golist sample-module fixture. Uses --changed-files=- with synthetic
+// stdin (Q6: cmd.Stdin = strings.NewReader) so git diff is bypassed and the
+// test exercises golist.Run + depgraph.Build + changeset.Resolve +
+// g.RevDepClosure end-to-end against real Go code. Skipped under -short.
+//
+// The sample module has pkga/pkgb/pkgc/pkgd; pkgb imports pkga, pkgc imports
+// pkga via test files, pkgd has build-tag-conditional files. Editing
+// pkga/a.go should affect pkga and its importers.
+func TestCascadeBinaryEndToEnd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping end-to-end binary test in short mode")
+	}
+
+	binPath := buildTestBinary(t)
+
+	// Locate sample module — pkg/golist/testdata/sample-module/ from the
+	// cascade repo root. main_test.go runs with cwd = cmd/cascade/, so the
+	// fixture is two levels up.
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
+	sampleModule := filepath.Join(repoRoot, "pkg", "golist", "testdata", "sample-module")
+
+	cmd := exec.Command(binPath, "--changed-files=-", "--root="+sampleModule) //nolint:gosec
+	cmd.Stdin = strings.NewReader("pkga/a.go\n")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("cascade end-to-end failed: %v\nstderr: %s\nstdout: %s",
+			err, stderr.String(), stdout.String())
+	}
+
+	out := strings.TrimRight(stdout.String(), "\n")
+	if out == "" {
+		t.Fatalf("expected non-empty output for pkga/a.go change; got empty\nstderr: %s", stderr.String())
+	}
+	// pkga itself must be in the affected set; pkgb (imports pkga) too.
+	wantPaths := []string{
+		"example.test/sample/pkga",
+		"example.test/sample/pkgb",
+	}
+	for _, want := range wantPaths {
+		if !strings.Contains(out, want) {
+			t.Errorf("affected set missing %q\nfull output: %s", want, out)
+		}
+	}
+}
+
+// buildTestBinary compiles the cascade binary into a tmpdir with -ldflags
+// injecting the test's version constants. Returns the absolute path to the
+// built binary. Shared by TestCascadeBinaryVersion / TestCascadeBinaryHelp /
+// TestCascadeBinaryEndToEnd.
+func buildTestBinary(t *testing.T) string {
+	t.Helper()
+
+	tmp := t.TempDir()
+	binName := "cascade"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(tmp, binName)
+
+	ldflags := strings.Join([]string{
+		"-X " + versionPkg + ".Version=" + injectedVersion,
+		"-X " + versionPkg + ".GitCommit=" + injectedCommit,
+		"-X " + versionPkg + ".GitBranch=" + injectedBranch,
+		"-X " + versionPkg + ".BuildDate=" + injectedDate,
+	}, " ")
+
+	build := exec.Command("go", "build", "-o", binPath, "-ldflags", ldflags, ".")
+	build.Stderr = newPrefixWriter(t, "go build: ")
+	if err := build.Run(); err != nil {
+		t.Fatalf("go build failed: %v", err)
+	}
+	return binPath
+}
+
+// Test-only constants for ldflags injection; shared across binary tests.
+const (
+	versionPkg      = "github.com/geomyidia/cascade/internal/project"
+	injectedVersion = "test-1.0.0"
+	injectedCommit  = "abcdef0"
+	injectedBranch  = "test-branch"
+	injectedDate    = "2026-05-07T18:30:00Z"
+)
 
 type prefixWriter struct {
 	t      *testing.T

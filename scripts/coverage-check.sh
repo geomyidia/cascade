@@ -15,9 +15,13 @@ set -euo pipefail
 #
 #   - pkg/golist/         100  (M2 landed; covered)
 #   - pkg/depgraph/       100  (M3 landed; covered)
-#   - pkg/changeset/      100  (M4)
+#   - pkg/changeset/      100  (M4 landed; covered)
 #   - internal/project/   100  (build-metadata; covered since M1.5)
-#   - cmd/cascade         no gate (io boundary; behavior tested by integration tests)
+#   - internal/cli/       100  (M5; CLI orchestration; getCwd / runGitDiff /
+#                                runGoListWrapper / signalContext seams keep
+#                                the io edges in-process testable)
+#   - cmd/cascade         no gate (one-liner; Layer-2 binary tests cover it
+#                                  incidentally via TestCascadeBinary*)
 #
 # When a future milestone adds a new public package with implementation,
 # add a matching pair of entries to PACKAGES and THRESHOLDS at the same
@@ -36,8 +40,9 @@ PACKAGES=(
     "github.com/geomyidia/cascade/pkg/depgraph"
     "github.com/geomyidia/cascade/pkg/changeset"
     "github.com/geomyidia/cascade/internal/project"
+    "github.com/geomyidia/cascade/internal/cli"
 )
-THRESHOLDS=(100 100 100 100)
+THRESHOLDS=(100 100 100 100 100)
 
 if [[ "${#PACKAGES[@]}" -ne "${#THRESHOLDS[@]}" ]]; then
     echo "::error::PACKAGES and THRESHOLDS arrays differ in length"

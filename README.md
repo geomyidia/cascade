@@ -57,7 +57,32 @@ For callers who already have a list of changed files (e.g., a CI workflow that's
 git diff --name-only origin/main..HEAD | cascade --changed-files=-
 ```
 
-`cascade --help` prints the full flag reference and exit-code table.
+### Flag reference
+
+<!-- keep in sync with internal/cli/cli.go's helpText constant -->
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--tags` | (none) | Comma-separated build tags passed to `go list -tags=`. |
+| `--base` | (required unless `--changed-files`) | Base git ref (e.g. `origin/main`); cascade runs `git diff --name-only <base>..<head>` to derive the change-set. |
+| `--head` | `HEAD` | Head git ref. |
+| `--changed-files` | (none) | Path to a file with one change-set entry per line. `-` reads from stdin. When set, `--base` is not required and `git diff` is not invoked. |
+| `--root` | `.` | Working directory for `go list` and module-root for `changeset.Resolve`. |
+| `--version` | false | Print version metadata (Version / GitCommit / GitBranch / BuildDate) and exit. |
+| `--help` | false | Print usage and exit. Routes to stdout per GNU convention; flag-parse errors route help to stderr per stdlib `flag` default. |
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success. Output may be empty if no Go files changed. |
+| 1 | Flag-parse error, missing required flags, or stdin/file read failure. |
+| 2 | `git diff` failed. The `*GitDiffError` carries the captured `git` stderr; cascade prints it on its own stderr. |
+| 3 | `go list` failed. The wrapped `*golist.ExitError` carries the captured `go list` stderr. |
+| 4 | Internal logic error. Should never occur — surface as a real bug. |
+| 5 | Cancelled or interrupted (SIGINT, SIGTERM, or context cancellation). |
+
+`cascade --help` prints the same flag reference and exit code table to stdout. CI workflows should branch on the specific exit code (e.g. retry the run on exit 5; fail-fast on exit 4) rather than treating all non-zero codes uniformly.
 
 ## Library
 
