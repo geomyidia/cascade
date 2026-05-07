@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -397,3 +398,130 @@ func (r *errReader) Read(_ []byte) (int, error) { return 0, r.err }
 
 // Compile-time assertion that errReader implements io.Reader.
 var _ io.Reader = (*errReader)(nil)
+
+// TestRun_DefaultRootResolvesCWD is the bug-#12 regression test at the CLI
+// integration layer. Pre-fix, invoking cli.Run with no --root flag (default
+// "."), a relative changedFile entry, and synthetic golist packages with
+// absolute Dir values produced empty stdout (with a stderr diagnostic post-
+// fix; pre-fix it was silent-empty). Post-fix, cfg.root is absolutized via
+// filepath.Abs(".") to the test process's actual cwd; the synthetic Dir
+// values constructed from os.Getwd() then match in changeset.Resolve's
+// dirMap, and the affected packages land on stdout.
+//
+// This test pairs with TestResolve_RelativeModuleRoot_AbsolutizedInternally
+// in pkg/changeset (library-layer); both layers are exercised so a
+// regression in either fix surfaces in the failing test for that layer.
+func TestRun_DefaultRootResolvesCWD(t *testing.T) {
+	installQuietSignalContext(t)
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+
+	withGitDiffSeam(t, func(_ context.Context, _, _, _ string) gitDiffResult {
+		return gitDiffResult{stdout: strings.NewReader("pkga/a.go\n"), err: nil}
+	})
+	withGoListSeam(t, func(_ context.Context, _, _ []string, _ ...golist.Option) ([]golist.Package, error) {
+		// Dir values rooted at the test process's cwd so absolutize-of-"."
+		// resolves to the same prefix and the parent-dir lookup succeeds.
+		return []golist.Package{
+			{ImportPath: "ex/pkga", Dir: filepath.Join(cwd, "pkga")},
+		}, nil
+	})
+
+	var stdout, stderr bytes.Buffer
+	// No --root flag: takes the default ".".
+	exit := Run(
+		[]string{"--base=origin/main", "--head=HEAD"},
+		strings.NewReader(""), &stdout, &stderr,
+	)
+	if exit != 0 {
+		t.Fatalf("exit = %d, want 0; stderr: %q", exit, stderr.String())
+	}
+	wantStdout := "ex/pkga\n"
+	if stdout.String() != wantStdout {
+		t.Errorf("stdout = %q, want %q (bug #12 regression — empty output indicates relative-root absolutize broken)",
+			stdout.String(), wantStdout)
+	}
+	// No diagnostic stderr should fire (affected is non-empty).
+	if strings.Contains(stderr.String(), "did not resolve") {
+		t.Errorf("unexpected diagnostic stderr on successful run: %q", stderr.String())
+	}
+}
+
+// TestRun_DiagnosticOnSuspiciousEmpty verifies the bug-#12 mitigation: when
+// changedFiles contains .go files but the affected-set is empty, cli.Run
+// emits a stderr breadcrumb to surface the suspicious zero-result. Drives a
+// pipeline where the seams return packages but the changedFile path doesn't
+// match any package's Dir, so changeset.Resolve yields empty seeds → empty
+// affected set → diagnostic fires.
+func TestRun_DiagnosticOnSuspiciousEmpty(t *testing.T) {
+	installQuietSignalContext(t)
+	withGitDiffSeam(t, func(_ context.Context, _, _, _ string) gitDiffResult {
+		// One .go file that won't resolve to any pkg.Dir (orphan path).
+		return gitDiffResult{stdout: strings.NewReader("orphan/path/file.go\n"), err: nil}
+	})
+	withGoListSeam(t, func(_ context.Context, _, _ []string, _ ...golist.Option) ([]golist.Package, error) {
+		// Pkg's Dir doesn't match the changed file's parent → no seeds.
+		return []golist.Package{
+			{ImportPath: "ex/pkga", Dir: "/m/pkga"},
+		}, nil
+	})
+
+	var stdout, stderr bytes.Buffer
+	exit := Run(
+		[]string{"--base=origin/main", "--head=HEAD", "--root=/m"},
+		strings.NewReader(""), &stdout, &stderr,
+	)
+	if exit != 0 {
+		t.Errorf("exit = %d, want 0 (suspicious-empty doesn't change exit code); stderr: %q",
+			exit, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout should be empty; got %q", stdout.String())
+	}
+	wantStderr := "did not resolve to any package"
+	if !strings.Contains(stderr.String(), wantStderr) {
+		t.Errorf("stderr should contain %q (diagnostic warning); got %q",
+			wantStderr, stderr.String())
+	}
+	// Verify the count is correct (1 Go file in changedFiles).
+	if !strings.Contains(stderr.String(), "1 changed Go file") {
+		t.Errorf("stderr should mention count=1; got %q", stderr.String())
+	}
+}
+
+// TestRun_NoDiagnosticOnDocsOnlyEmpty verifies the diagnostic does NOT fire
+// when changedFiles has no .go files — that's a legitimate empty case (a
+// docs-only PR), not the suspicious-zero-result case bug #12 represents.
+// The .go-suffix filter is the one piece of state that distinguishes the
+// two; this test pins that distinction.
+func TestRun_NoDiagnosticOnDocsOnlyEmpty(t *testing.T) {
+	installQuietSignalContext(t)
+	withGitDiffSeam(t, func(_ context.Context, _, _, _ string) gitDiffResult {
+		// Only non-.go files — legitimate "no Go files changed" case.
+		return gitDiffResult{stdout: strings.NewReader("README.md\nCHANGELOG\n"), err: nil}
+	})
+	withGoListSeam(t, func(_ context.Context, _, _ []string, _ ...golist.Option) ([]golist.Package, error) {
+		return []golist.Package{
+			{ImportPath: "ex/pkga", Dir: "/m/pkga"},
+		}, nil
+	})
+
+	var stdout, stderr bytes.Buffer
+	exit := Run(
+		[]string{"--base=origin/main", "--head=HEAD", "--root=/m"},
+		strings.NewReader(""), &stdout, &stderr,
+	)
+	if exit != 0 {
+		t.Errorf("exit = %d, want 0; stderr: %q", exit, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout should be empty (no Go files changed); got %q", stdout.String())
+	}
+	if strings.Contains(stderr.String(), "did not resolve") {
+		t.Errorf("diagnostic should NOT fire for docs-only empty case; stderr: %q",
+			stderr.String())
+	}
+}

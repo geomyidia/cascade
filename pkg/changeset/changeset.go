@@ -21,17 +21,22 @@ type config struct {
 }
 
 // WithModuleRoot sets the module root used to resolve relative entries in
-// changedFiles. When supplied, Resolve uses dir directly without consulting
-// the filesystem.
+// changedFiles. Both absolute and relative paths are accepted; Resolve calls
+// filepath.Abs on the supplied value before use, so a relative path is
+// resolved against the process cwd at call time. (Closes bug #12: a literal
+// "." or any other relative path now resolves correctly rather than silently
+// failing the absolute-keyed dirMap lookup.)
 //
 // If WithModuleRoot is not supplied, Resolve falls back to os.Getwd at call
-// time. Tests should pass WithModuleRoot explicitly so test outcomes don't
-// depend on the working directory and the io is bypassed.
+// time. Tests should pass WithModuleRoot with an absolute path so test
+// outcomes don't depend on the working directory and the io is bypassed.
 //
-// An empty argument is treated as "explicitly set to empty," distinct from
-// "not set" (the latter triggers the os.Getwd fallback). With an
-// explicitly-empty moduleRoot, relative entries in changedFiles cannot be
-// resolved to absolute paths and silently fail to match any package.
+// An empty argument and "." both resolve to the cwd at call time (because
+// filepath.Abs("") and filepath.Abs(".") are equivalent). The distinction
+// between "explicitly empty" and "not set" remains in the implementation
+// (moduleRootSet flag) so tests that need to drive the os.Getwd fallback
+// branch can still do so by omitting WithModuleRoot, but the user-visible
+// behaviour of "." vs "" is now identical and correct.
 func WithModuleRoot(dir string) Option {
 	return func(c *config) {
 		c.moduleRoot = dir
@@ -102,6 +107,17 @@ func Resolve(changedFiles []string, pkgs []golist.Package, opts ...Option) []str
 		if cwd, err := getCwd(); err == nil {
 			cfg.moduleRoot = cwd
 		}
+	}
+
+	// Absolutize moduleRoot so the parent-dir comparison against pkg.Dir
+	// (which golist documents as absolute) succeeds even when the caller
+	// supplies a relative path. filepath.Abs("") and filepath.Abs(".")
+	// both resolve to the cwd, so this also handles the empty-string case
+	// gracefully. On error (rare; documented in os.Getwd), leave as-is —
+	// the lookup will fail consistently with the unfixed relative-input
+	// case rather than panic. Closes bug #12.
+	if abs, err := filepath.Abs(cfg.moduleRoot); err == nil {
+		cfg.moduleRoot = abs
 	}
 
 	if len(pkgs) == 0 || len(changedFiles) == 0 {

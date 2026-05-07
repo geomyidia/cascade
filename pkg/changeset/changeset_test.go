@@ -1,6 +1,8 @@
 package changeset_test
 
 import (
+	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -314,5 +316,57 @@ func TestResolve_EmptyFilePathSkipped(t *testing.T) {
 	want := []string{"ex/pkga"}
 	if !stringSlicesEqual(got, want) {
 		t.Errorf("Resolve = %v, want %v (empty file paths must be skipped)", got, want)
+	}
+}
+
+// TestResolve_RelativeModuleRoot_AbsolutizedInternally is the regression test
+// for bug #12. Pre-fix, passing a relative moduleRoot (notably ".") with
+// relative changedFiles produced an empty result silently because filepath.
+// Join(".", "rel/path") returns relative output, which can't match the
+// absolute keys built from golist.Package.Dir. Post-fix, Resolve absolutizes
+// moduleRoot via filepath.Abs before the dirMap lookup, so relative
+// moduleRoots resolve correctly against the process cwd.
+//
+// The test sets up packages with Dir values rooted at the test's actual cwd
+// (via os.Getwd) so the post-absolutize lookup succeeds with predictable
+// values. Pre-fix this test fails (empty result); post-fix it passes.
+func TestResolve_RelativeModuleRoot_AbsolutizedInternally(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+
+	pkgs := []golist.Package{
+		// Dir values must be absolute (golist contract); construct them
+		// rooted at the test cwd so absolutize-of-"." resolves to the same
+		// prefix and the parent-dir lookup succeeds.
+		{ImportPath: "ex/pkga", Dir: filepath.Join(cwd, "pkga")},
+		{ImportPath: "ex/pkgb", Dir: filepath.Join(cwd, "pkgb")},
+	}
+
+	tests := []struct {
+		name       string
+		moduleRoot string
+	}{
+		// Bug #12's headline case: literal "." (the CLI flag default).
+		{name: "dot", moduleRoot: "."},
+		// Empty string: filepath.Abs("") also resolves to cwd; same fix.
+		{name: "empty", moduleRoot: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := changeset.Resolve(
+				[]string{"pkga/a.go", "pkgb/b.go"},
+				pkgs,
+				changeset.WithModuleRoot(tt.moduleRoot),
+			)
+			want := []string{"ex/pkga", "ex/pkgb"}
+			if !stringSlicesEqual(got, want) {
+				t.Errorf("Resolve(...WithModuleRoot(%q)) = %v, want %v\n"+
+					"(pre-fix empty output would indicate bug #12 regressed)",
+					tt.moduleRoot, got, want)
+			}
+		})
 	}
 }

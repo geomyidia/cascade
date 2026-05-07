@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -142,6 +143,18 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return exitSuccess
 	}
 
+	// Absolutize cfg.root once after flag parse so the four downstream
+	// consumers (runGitDiff, classifyGitDiffError, golist.WithDir,
+	// changeset.WithModuleRoot) all receive a path resolved against the
+	// process cwd exactly once. filepath.Abs(".") and filepath.Abs("")
+	// both resolve to the cwd. On error, leave as-is and let the
+	// library-layer absolutization in changeset.Resolve catch it.
+	// Closes bug #12 at the CLI layer (defense in depth alongside the
+	// library-layer fix).
+	if abs, err := filepath.Abs(cfg.root); err == nil {
+		cfg.root = abs
+	}
+
 	if err := validateConfig(cfg); err != nil {
 		fmt.Fprintln(stderr, "cascade:", err)
 		return mapError(err)
@@ -157,6 +170,27 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintln(stderr, "cascade:", err)
 		return mapError(err)
+	}
+
+	// Surface a diagnostic when changedFiles contained Go files but the
+	// affected-set is empty — that's a suspicious zero-result (any .go
+	// file change should produce at least the seed package itself).
+	// Filter on .go suffix so docs-only PRs (legitimately empty) stay
+	// silent. Doesn't change exit code; just adds a stderr breadcrumb.
+	// Bug #12's silent-empty case would have surfaced in seconds with
+	// this check.
+	if len(affected) == 0 {
+		nGoFiles := 0
+		for _, f := range changedFiles {
+			if strings.HasSuffix(f, ".go") {
+				nGoFiles++
+			}
+		}
+		if nGoFiles > 0 {
+			fmt.Fprintf(stderr,
+				"cascade: %d changed Go file(s) did not resolve to any package; check --root\n",
+				nGoFiles)
+		}
 	}
 
 	for _, path := range affected {
