@@ -9,7 +9,7 @@ updated: 2026-05-07
 state: Active
 supersedes: null
 superseded-by: null
-version: 1.0
+version: 1.1
 ---
 
 # cascade — M4: `changeset` (Changed-Files-to-Packages Mapping)
@@ -54,7 +54,25 @@ Closing report names guides loaded + pattern IDs cited.
 
 ## Public API surface
 
-One exported function. Zero exported types. The package is the leanest in the public surface.
+One exported function plus an `Option` type and one option constructor. Three exported names total — still the leanest in the public surface.
+
+### `Option` and `WithModuleRoot`
+
+```go
+package changeset
+
+// Option configures a Resolve call. Apply via Resolve's variadic parameter.
+type Option func(*config)
+
+// WithModuleRoot sets the module root used to resolve relative entries in
+// changedFiles. When supplied, Resolve uses dir directly without consulting
+// the filesystem.
+//
+// If WithModuleRoot is not supplied, Resolve falls back to os.Getwd at call
+// time. Tests should pass WithModuleRoot explicitly so test outcomes don't
+// depend on the working directory and the io is bypassed.
+func WithModuleRoot(dir string) Option
+```
 
 ### `Resolve`
 
@@ -67,15 +85,16 @@ package changeset
 //
 // changedFiles are paths to Go files that have been modified, added, renamed,
 // or removed (typically `git diff --name-only` output, one per line). Paths
-// may be relative (interpreted relative to moduleRoot) or absolute; the
-// function normalises before lookup.
+// may be relative (resolved against moduleRoot) or absolute; filepath.Clean
+// is applied before lookup.
 //
 // pkgs is the package list returned by golist.Run; each Package's Dir field
-// (absolute path) plus its file lists drive the lookup.
+// (absolute path) drives the lookup.
 //
-// moduleRoot is the absolute path of the module's repo root, used to resolve
-// relative entries in changedFiles. Typically `git rev-parse --show-toplevel`
-// in the caller (M5 CLI).
+// opts configure the call. The only option in v0.x is WithModuleRoot; if not
+// supplied, Resolve falls back to os.Getwd at call time. Typically M5's CLI
+// passes WithModuleRoot(rootDir) with the value of `git rev-parse
+// --show-toplevel`.
 //
 // Mapping rules:
 //   - A file ending in ".go" whose parent directory exactly matches some
@@ -86,6 +105,9 @@ package changeset
 //     directory. Internal-test (package foo) and external-test (package
 //     foo_test) both yield foo's ImportPath, because affecting either re-runs
 //     foo's tests.
+//   - Files in a package's IgnoredGoFiles (build-tag-excluded) map to the
+//     package — the rule is parent-dir match; file-list membership is
+//     irrelevant to the lookup.
 //   - Non-Go files (no .go extension) are silently skipped.
 //   - Files in subdirectories of a package's Dir (e.g., testdata/) are
 //     skipped, because the parent directory does not match any package's Dir.
@@ -94,14 +116,15 @@ package changeset
 //
 // Determinism: identical inputs yield identical output across runs. The
 // returned slice is sorted; duplicates are deduplicated.
-func Resolve(changedFiles []string, pkgs []golist.Package, moduleRoot string) []string
+func Resolve(changedFiles []string, pkgs []golist.Package, opts ...Option) []string
 ```
 
 **Decided:**
-- Single exported function. No `Resolver` type, no functional options, no error return. The contract fits in a function signature plus a doc comment.
-- `moduleRoot` is positional rather than via a functional option. Adding `Option`/`WithModuleRoot` for one option is over-engineering at this surface size; a positional param keeps the call site one line.
+- Three exported names: `Resolve`, `Option`, and `WithModuleRoot`. The contract fits in two function signatures plus an option-pattern config.
+- `moduleRoot` is supplied via `WithModuleRoot(dir string) Option`, not as a positional parameter. The functional-option pattern future-proofs for additional knobs (e.g. `WithIgnorePattern`) and lets tests opt out of the `os.Getwd` fallback so they remain pure (no io). Plan-mode resolution of Q1.
+- The single io edge (`os.Getwd` fallback when `WithModuleRoot` is not supplied) is hooked through an internal function-variable seam (`getCwd`) following M2's `runGoList` pattern. Tests in `seam_test.go` (`package changeset` internal) replace it to drive the success/error branches without depending on the actual test cwd. Plan-mode resolution of Q2.
 - Return type is `[]string`, not a named `[]ImportPath` type. Consistent with M3's decision to use `string` for import paths throughout.
-- No error return. Every input shape is handled gracefully — out-of-package files, non-Go files, removed files, nil/empty inputs all produce sensible output.
+- No error return. Every input shape is handled gracefully — out-of-package files, non-Go files, removed files, nil/empty inputs, and `os.Getwd` failures all produce sensible output.
 
 **Not exposed in M4** (deliberately deferred):
 - A `WithIgnore(pattern)` option to skip files matching some glob. Speculative; no current need.
@@ -196,7 +219,7 @@ Per [`assets/ai/LEDGER_DISCIPLINE.md`](../../../assets/ai/LEDGER_DISCIPLINE.md).
 | ID | Criterion | Verify (reproducible) | Significance | Status | Evidence |
 |----|-----------|----------------------|--------------|--------|----------|
 | F-1 | `pkg/changeset/doc.go` exists with package comment | `test -f pkg/changeset/doc.go && head -3 pkg/changeset/doc.go \| grep -q '^// Package changeset'` | serious | open | preserved from M1 stub |
-| F-2 | `Resolve` signature matches spec | `go doc github.com/geomyidia/cascade/pkg/changeset.Resolve \| grep -F 'func Resolve(changedFiles []string, pkgs []golist.Package, moduleRoot string) []string'` | serious | open | |
+| F-2 | `Resolve` signature matches spec | `go doc github.com/geomyidia/cascade/pkg/changeset.Resolve \| grep -F 'func Resolve(changedFiles []string, pkgs []golist.Package, opts ...Option) []string'` | serious | open | |
 | F-3 | All `TestResolve_StandardCases` rows pass | `go test -run 'TestResolve_StandardCases' ./pkg/changeset` | serious | open | enumerated cases |
 | F-4 | Hand-traceable 4-package case passes | `go test -run 'TestResolve_HandTraceable' ./pkg/changeset` | serious | open | spec exit criterion |
 | F-5 | Path-normalisation cases pass | `go test -run 'TestResolve_PathNormalisation' ./pkg/changeset` | serious | open | OS-portable |
@@ -231,21 +254,23 @@ Per [`assets/ai/LEDGER_DISCIPLINE.md`](../../../assets/ai/LEDGER_DISCIPLINE.md).
 
 **`changedFiles` contains paths that have been *renamed*.** `git diff --name-only` may emit both the old and new path as separate entries (or a single rename indicator depending on flags). `Resolve` handles each entry independently — no special-casing needed. Document.
 
-## Open questions
+**Single io edge from `os.Getwd` fallback.** Per the Q2 resolution, the package introduces one io call when `WithModuleRoot` is not supplied. Mitigation: hook through an internal function-variable seam (`getCwd = os.Getwd`) so seam_test.go can replace it; structurally identical to M2's `runGoList` seam. Tests bypass the io entirely by passing `WithModuleRoot` explicitly; production callers (M5 CLI) should also pass `WithModuleRoot` with the result of `git rev-parse --show-toplevel` rather than relying on the fallback.
 
-These are the calibrations the maintainer should weigh in on before CC starts implementation.
+## Open questions (resolved)
 
-1. **`moduleRoot` as positional parameter, or via functional option?** Specced as positional for API simplicity (one exported function, one config knob, no `Option` type to define). Functional options would future-proof for additional knobs (`WithIgnorePattern`, `WithFollowSymlinks`, etc.) but introduce surface area for hypothetical needs. Lean: positional. Confirm or override.
+All six questions resolved during plan-mode review prior to M4 implementation. Recorded here for historical context; the decisions are now reflected in the API surface and ledger above.
 
-2. **Behaviour when `moduleRoot == ""` and `changedFiles` contains relative paths.** Two options: (a) treat empty `moduleRoot` as "use `os.Getwd()`" — convenience, mild magic; (b) require a non-empty `moduleRoot` when any path is relative — strict, predictable. Lean: (b), with a clear godoc note. Empty `moduleRoot` works fine when all `changedFiles` are absolute. Confirm.
+1. **`moduleRoot` as positional parameter, or via functional option?** **Resolved:** functional option. The maintainer overrode the spec's "positional" lean: the option-pattern future-proofs for additional knobs (e.g. `WithIgnorePattern`) and, more importantly here, lets tests opt out of the `os.Getwd` fallback (Q2) by passing `WithModuleRoot` explicitly so they remain pure (no io). The cost — one extra `Option` type plus one constructor — is small relative to the testability gain.
 
-3. **Should `Resolve` deduplicate across distinct lexical forms of the same path?** E.g., `pkga/a.go` and `./pkga/a.go` and `pkga/./a.go` after `filepath.Clean` all become `pkga/a.go`; deduplication happens automatically in the result-set. But what about `pkga/a.go` (relative, resolved against moduleRoot=`/m`) and `/m/pkga/a.go` (already absolute)? Both resolve to the same package and the result-set dedupes. Confirm this is the desired behaviour (not "treat each lexical form as a distinct change").
+2. **Behaviour when `moduleRoot == ""` and `changedFiles` contains relative paths.** **Resolved:** option (a) modified — when `WithModuleRoot` is *not supplied*, fall back to `os.Getwd` at call time; when `WithModuleRoot` is supplied (even with an empty string), use that value as-is. Tests bypass the `os.Getwd` io by always passing `WithModuleRoot`. The fallback is hooked through an internal function-variable seam (`getCwd`) so the success/error branches of `os.Getwd` are testable in-process without depending on the actual cwd. Pattern matches M2's `runGoList` seam.
 
-4. **Test fixtures: synthetic-only, or include a small repo fixture under `pkg/changeset/testdata/`?** Specced as synthetic-only because the function is pure-data and doesn't touch the filesystem. A repo fixture would only matter if the function followed symlinks or read file metadata, which it doesn't. Lean: synthetic-only. Confirm.
+3. **Should `Resolve` deduplicate across distinct lexical forms of the same path?** **Resolved:** yes — followed the spec's lean. `filepath.Clean` is applied before lookup; the result-set deduplicates via `map[string]struct{}{}`. Distinct lexical forms collapse naturally.
 
-5. **`IgnoredGoFiles` handling.** Currently the spec maps all `.go`-extension files in a package's Dir to that package, regardless of whether they're in `GoFiles` or `IgnoredGoFiles`. Argument for: tag-excluded files still belong to the package; if their tag becomes active in the build-tag union, they affect the package. Argument against: under the current tag union, an `IgnoredGoFiles` entry is irrelevant. Lean: map regardless (simpler semantics; edges erring on the side of "more re-runs, not fewer" is the safer side for cascade's affected-set-for-CI use case). Confirm.
+4. **Test fixtures: synthetic-only, or include a small repo fixture under `pkg/changeset/testdata/`?** **Resolved:** synthetic-only — followed the spec's lean. The function is path-only; no filesystem reads. Tests use POSIX-style absolute paths (`/m/pkga`) directly; CI is Linux-only and Windows portability is documented as out-of-scope.
 
-6. **Closing-report evidence for F-13 (godoc rendering).** Should the closing report include the full `go doc` output for the package, or a summary line plus a one-paragraph judgment that "all exported names are documented per DC-01/DC-02"? The latter is lighter-weight for reviewers; the former is stronger evidence. Lean: full output, capped at first 20 lines (consistent with the verify command). Confirm.
+5. **`IgnoredGoFiles` handling.** **Resolved:** map regardless — followed the spec's lean and confirmed by the maintainer. The mapping rule is "parent-dir match"; file-list membership is irrelevant to the lookup. A `.go` file in a package's `Dir` maps to that package whether it's in `GoFiles`, `TestGoFiles`, `XTestGoFiles`, `IgnoredGoFiles`, or none of them.
+
+6. **Closing-report evidence for F-13 (godoc rendering).** **Resolved:** full `go doc` output capped at first 20 lines — followed the spec's lean. Consistent with the verify command.
 
 ## Cross-references
 
