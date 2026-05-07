@@ -93,7 +93,36 @@ No softpedals identified at self-check. CDC review will be the independent verif
 
 ## CDC review notes
 
-_Pending. To be filled in by CDC after independent verification per `LEDGER_DISCIPLINE.md` CDC protocol._
+CDC pass run against PR #7 head `835b4b0` (with retro fix-up `656dd59`). Sandbox has no `go` toolchain so the toolchain rows (F-8..F-15, F-17, F-20 test-passes) stay CC-attested via CI green; the structural rows verifiable by direct read were re-checked.
+
+**Verified directly by CDC (per-row reproduction):**
+
+- **F-1 through F-7** (file existence + signature shape) confirmed by direct reads of `depgraph/depgraph.go` and `depgraph/methods.go`. The `Graph` type is opaque (lines 20–38, all four fields unexported); `Build` signature exact match (line 54); five methods present with the spec signatures (`Has`, `DirectImports`, `DirectImporters`, `RevDepClosure`, `Stats`).
+- **F-10** (Test/XTest imports become edges) confirmed by reading `mergeImports` (depgraph.go:92–118) and `Build`'s edge-collection (depgraph.go:68): the union of `p.Imports`, `p.TestImports`, `p.XTestImports` is the forward edge set.
+- **F-12** (duplicate-package idempotency) confirmed by reading Build's first-pass overwrite semantics: duplicate `p.ImportPath` entries cause the second iteration to overwrite `g.forward[p.ImportPath]`, last-entry-wins as documented. Empty `ImportPath` skipped at line 64–66.
+- **F-16** (no non-stdlib imports beyond own module) confirmed by reading `depgraph.go`'s import block (just `sort` + own module's `golist`) and `methods.go`'s (just `slices` + `sort`). Combined with the unchanged `go.mod` (zero `require` entries), the F-16 condition holds.
+- **F-19** (closing report attestation) confirmed by §"Substrate loaded at session start" above, which enumerates eight guides with their pattern IDs cited. That's the load-bearing artifact for this row.
+- **F-20** (Stats type/method exported with documented fields) confirmed by reading `methods.go:13–32` (Stats struct with all four fields documented) and `methods.go:108–110` (Stats() accessor).
+
+**CC-attested via CI green (not re-runnable in sandbox):**
+
+F-8 (StandardTopologies subtest), F-9 (HandTraceable), F-11 (Direct/Has tests), F-13 (`-count=10` determinism), F-14 (cycle/self-loop termination), F-15 (per-package coverage gate at 100%), F-17 (`TestGraphConcurrentRead` under `-race`), F-18 (`go doc` rendering). PR #7 status check shows all three CI jobs green — `test (Go 1.25.3)`, `test (Go 1.26.x)`, `lint`. The lint-job pass is non-trivial: OUT-1's fresh-cache mechanism caught the `unused-parameter` issue locally before the push, so the CI green is the post-fix state, not stale-cache passthrough.
+
+**No softpedals identified.** The Pre-PR self-check section walks all twenty rows naming criterion-vs-evidence shape; CDC's independent re-read finds the same conclusion. The one cited shape difference (F-2's `// Has unexported fields.` vs the criterion's "no exported field lines") is godoc's standard rendering for opaque types, not a softpedal — the criterion is *satisfied* by the absence of exported fields, and godoc *generates* that comment from that absence.
+
+**No silent drops.** Spec ledger had 19 rows (F-1..F-19); impl plan added F-20 with disclosed attribution to M3-1; retro accounts for all twenty. Row count check: 20 declared / 20 closed.
+
+**Substrate-loaded section is the strongest yet across M1, M2, M3.** The pattern-ID enumeration with the explicit IM-04 cite-vs-content discrepancy named is exactly the methodology's "honest engagement" practice in operational form. Future milestones should keep this format. Of particular value: the call-out that CLAUDE.md's "testify/require" line is outdated relative to the project's actual practice (plain stdlib `testing`) — that's the substrate flagging its own drift, which is exactly what substrate is for.
+
+**Engineering observations worth carrying forward to retros' What-Worked corpus:**
+
+- The `sort.StringsAreSorted(got)` per-subtest assertion turns the `-count=10` determinism check from statistical-flake-detection into structural-property-detection. If a future change ever produces unsorted output for any topology, the failure names the topology rather than reporting a flake.
+- Removing dead defensive code (the original `sortAndDedup`'s dedup branch) rather than adding tests for impossible-to-reach paths is the right discipline. The 100% coverage gate surfaces this kind of dead code at exactly the right moment.
+- OUT-1 paid for itself within seconds of installation. Three-milestone pattern of stale-cache lint hiding genuine issues is now closed.
+
+**Closure recommendation: M3 is mergeable.** All twenty ledger rows have evidence of the right shape. The substrate-loaded enumeration meets F-19. The engineering judgment around the dead-branch removal and the per-subtest sort-property assertion is sound and documented.
+
+**One forward-looking observation (carry-forward, not a finding for M3):** the CLAUDE.md "testify/require" line should be updated to match actual practice (plain stdlib `testing`) — but that's a CLAUDE.md edit, not an M3 closure blocker. Could land alongside the layout-refactor PR or as a small standalone fix.
 
 ## Carry-forward into M4
 
