@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/geomyidia/cascade/depgraph"
-	"github.com/geomyidia/cascade/golist"
+	"github.com/geomyidia/cascade/pkg/depgraph"
+	"github.com/geomyidia/cascade/pkg/golist"
 )
 
 // TestRevDepClosure_StandardTopologies (F-8, plus F-13 under -count=10

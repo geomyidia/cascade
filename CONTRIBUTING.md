@@ -44,13 +44,13 @@ The general baseline is Go community best practices. The repo also keeps a curat
 - **Testing:** `github.com/stretchr/testify/require` for assertions. Table-driven tests for anything with multiple input/output variants.
 - **Test file ordering:** test functions first, then helpers and fixtures.
 - **Variable declarations:** group related vars in a single `var ( ... )` block at file scope.
-- **Coverage:** the pure packages (`golist/`, `depgraph/`, `changeset/`) must hit **100%** statement coverage, enforced per-package by `scripts/coverage-check.sh` in CI. The Makefile's `coverage-check` target enforces a softer 90% overall floor as a quick local sanity check. The CLI shell (`cmd/cascade/`) is not coverage-gated — its behavior is verified by an end-to-end test.
+- **Coverage:** the pure packages (`pkg/golist/`, `pkg/depgraph/`, `pkg/changeset/`) plus the build-metadata package (`internal/project/`) must hit **100%** statement coverage, enforced per-package by `scripts/coverage-check.sh` in CI. The Makefile's `coverage-check` target enforces a softer 90% overall floor as a quick local sanity check. The CLI shell (`cmd/cascade/`) is not coverage-gated — its behavior is verified by an end-to-end test.
 
 For coverage discipline specifically — what to test, how to read profiles, how to fix root causes rather than masking symptoms — see [`assets/ai/CLAUDE-CODE-COVERAGE.md`](./assets/ai/CLAUDE-CODE-COVERAGE.md).
 
 ## Adding a new public package
 
-If a future change adds a new public package (sibling to `golist/`, `depgraph/`, `changeset/`) with implementation, also add a matching pair of entries to `PACKAGES` and `THRESHOLDS` in `scripts/coverage-check.sh` at the same array index. This is the structural way to commit to a coverage policy explicitly per package.
+If a future change adds a new public package (sibling to `pkg/golist/`, `pkg/depgraph/`, `pkg/changeset/`) with implementation, also add a matching pair of entries to `PACKAGES` and `THRESHOLDS` in `scripts/coverage-check.sh` at the same array index. This is the structural way to commit to a coverage policy explicitly per package. New private (cascade-only) packages live under `internal/`.
 
 ## Go-version policy
 
@@ -58,11 +58,11 @@ CI's matrix tracks Go's currently-supported major versions (the two newest relea
 
 ## Versioning
 
-The canonical version source is **`project/VERSION`** — a single file containing the module version (e.g. `0.1.0`). Bumping cascade is a one-file edit. The repo root has a `./VERSION` symlink pointing at `project/VERSION` for convenience (`cat VERSION` from the repo top still works).
+The canonical version source is **`internal/project/VERSION`** — a single file containing the module version (e.g. `0.1.0`). Bumping cascade is a one-file edit. The repo root has a `./VERSION` symlink pointing at `internal/project/VERSION` for convenience (`cat VERSION` from the repo top still works).
 
-Why inside `project/`? Go's `//go:embed` directive cannot reach files outside the package directory tree, so the canonical file lives next to the code that embeds it. The Makefile reads `project/VERSION` and injects the value into `project.Version` via `-ldflags` for full builds. Plain `go install` (no ldflags) gets the same value via the embedded file. Both paths converge on the same source of truth.
+Why inside `internal/project/`? Go's `//go:embed` directive cannot reach files outside the package directory tree, so the canonical file lives next to the code that embeds it. The Makefile reads `internal/project/VERSION` and injects the value into `project.Version` via `-ldflags` for full builds. Plain `go install` (no ldflags) gets the same value via the embedded file. Both paths converge on the same source of truth.
 
-**Note for Windows contributors:** git on Windows treats symlinks as text files unless `core.symlinks = true` is set. If `./VERSION` shows up as plain text on your checkout, either set that config or read `project/VERSION` directly — the Makefile already does.
+**Note for Windows contributors:** git on Windows treats symlinks as text files unless `core.symlinks = true` is set. If `./VERSION` shows up as plain text on your checkout, either set that config or read `internal/project/VERSION` directly — the Makefile already does.
 
 ## Reporting issues
 

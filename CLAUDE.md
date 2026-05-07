@@ -79,17 +79,21 @@ bash scripts/coverage-check.sh   # CI-level: per-package 100% on pure pkgs
 
 ## Architecture
 
-Two layers, with a deliberate boundary:
+Three layers, with deliberate boundaries:
 
-### Pure core (`golist/`, `depgraph/`, `changeset/`)
+### Pure core — public API (`pkg/golist/`, `pkg/depgraph/`, `pkg/changeset/`)
 
 Algorithmic packages. **No io, no syscalls, no `os/exec`** between them. Inputs are typed values; outputs are typed values; tests are table-driven over synthetic graphs. These are exported public APIs — downstreams can build their own affected-package tooling on top of cascade's primitives without re-implementing the graph algorithms.
 
-- `golist` — typed `Package` values parsed from `go list -deps -json` output, plus a `Run()` function that owns the `os/exec` boundary. **The only place cascade shells out to `go`.** The parsed types are public so callers fighting `golang.org/x/tools/go/packages.Load` can use them directly.
-- `depgraph` — directed import graph + reverse-transitive closure traversal.
-- `changeset` — maps changed file paths to import paths.
+- `pkg/golist` — typed `Package` values parsed from `go list -deps -json` output, plus a `Run()` function that owns the `os/exec` boundary. **The only place cascade shells out to `go`.** The parsed types are public so callers fighting `golang.org/x/tools/go/packages.Load` can use them directly.
+- `pkg/depgraph` — directed import graph + reverse-transitive closure traversal.
+- `pkg/changeset` — maps changed file paths to import paths.
 
 These three packages are **gated at 100% statement coverage in CI** by `scripts/coverage-check.sh`. The gate skips packages with no coverage data ("N/A"), so empty pre-implementation stubs don't fire it; once a package gets code, the gate fires immediately.
+
+### Private support — module-internal (`internal/project/`)
+
+Build-metadata package; carries cascade-specific Version / GitCommit / GitBranch / BuildDate values populated via `-ldflags` at link time, with a `runtime/debug.ReadBuildInfo` fallback for `go install`-built binaries. The pattern is generic but the values are cascade-specific; Go's `internal/` rule structurally enforces that downstream consumers cannot import this package. Also gated at 100% coverage by `scripts/coverage-check.sh`.
 
 ### I/O shell (`cmd/cascade/`)
 
@@ -108,8 +112,8 @@ Standard load order at the start of any non-trivial milestone:
 1. **Index, always:** `assets/ai/go/SKILL.md`. Read the "Document Selection Guide" table and the "Critical Rules" section. The chapters are loaded on demand.
 2. **Anti-patterns, always:** `assets/ai/go/09-anti-patterns.md`. Walk the AP-NN list relevant to what you're touching. Cite IDs in commit messages and in the closing report (e.g., *"Replaces string-checked error with `errors.Is` (AP-04)"*).
 3. **Topic-specific:** load on demand based on what the milestone touches. The full mapping is in SKILL.md; rough map for cascade:
-   - **I/O shells** (`golist/`, `cmd/cascade/`) — `03-error-handling.md`, `06-concurrency.md`, `02-api-design.md`, `05-interfaces-methods.md`, `07-testing.md`, `11-documentation.md`.
-   - **Pure-data packages** (`depgraph/`, `changeset/`) — `01-core-idioms.md`, `04-type-design.md`, `07-testing.md`, `11-documentation.md`.
+   - **I/O shells** (`pkg/golist/`, `cmd/cascade/`) — `03-error-handling.md`, `06-concurrency.md`, `02-api-design.md`, `05-interfaces-methods.md`, `07-testing.md`, `11-documentation.md`.
+   - **Pure-data packages** (`pkg/depgraph/`, `pkg/changeset/`) — `01-core-idioms.md`, `04-type-design.md`, `07-testing.md`, `11-documentation.md`.
 
 Per-milestone design docs (in `docs/design/`) name the load-bearing chapter list and pattern IDs explicitly. Use those as the authoritative load list for the milestone you're working on.
 

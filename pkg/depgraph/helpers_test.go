@@ -3,8 +3,8 @@ package depgraph_test
 import (
 	"testing"
 
-	"github.com/geomyidia/cascade/depgraph"
-	"github.com/geomyidia/cascade/golist"
+	"github.com/geomyidia/cascade/pkg/depgraph"
+	"github.com/geomyidia/cascade/pkg/golist"
 )
 
 // buildTestGraph constructs a Graph from a compact map representation

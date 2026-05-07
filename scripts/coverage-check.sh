@@ -13,10 +13,11 @@ set -euo pipefail
 # Threshold policy (parallel arrays — bash 3.2 compatible, so this works on
 # macOS's stock /bin/bash without forcing contributors to brew install bash):
 #
-#   - golist/      100  (M2 will hit this; pre-M2 the package is empty so 0/0=N/A)
-#   - depgraph/    100  (M3)
-#   - changeset/   100  (M4)
-#   - cmd/cascade  no gate (io boundary; behavior tested by integration tests)
+#   - pkg/golist/         100  (M2 landed; covered)
+#   - pkg/depgraph/       100  (M3 landed; covered)
+#   - pkg/changeset/      100  (M4)
+#   - internal/project/   100  (build-metadata; covered since M1.5)
+#   - cmd/cascade         no gate (io boundary; behavior tested by integration tests)
 #
 # When a future milestone adds a new public package with implementation,
 # add a matching pair of entries to PACKAGES and THRESHOLDS at the same
@@ -31,10 +32,10 @@ if [[ ! -f "$PROFILE" ]]; then
 fi
 
 PACKAGES=(
-    "github.com/geomyidia/cascade/golist"
-    "github.com/geomyidia/cascade/depgraph"
-    "github.com/geomyidia/cascade/changeset"
-    "github.com/geomyidia/cascade/project"
+    "github.com/geomyidia/cascade/pkg/golist"
+    "github.com/geomyidia/cascade/pkg/depgraph"
+    "github.com/geomyidia/cascade/pkg/changeset"
+    "github.com/geomyidia/cascade/internal/project"
 )
 THRESHOLDS=(100 100 100 100)
 

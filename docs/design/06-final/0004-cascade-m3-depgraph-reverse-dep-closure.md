@@ -5,8 +5,8 @@ author: "walking importers"
 component: All
 tags: [change-me]
 created: 2026-05-06
-updated: 2026-05-06
-state: Active
+updated: 2026-05-07
+state: Final
 supersedes: null
 superseded-by: null
 version: 1.0

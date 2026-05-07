@@ -14,7 +14,7 @@ CODE_NAME := "cascade"
 MODULE_PATH := github.com/geomyidia/cascade
 BIN_DIR := ./bin
 MODE := debug
-VERSION := $(shell cat project/VERSION 2>/dev/null || echo "unknown")
+VERSION := $(shell cat internal/project/VERSION 2>/dev/null || echo "unknown")
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 GIT_SUMMARY := $(shell git describe --tags --dirty --always 2>/dev/null || echo "untagged")
@@ -23,7 +23,7 @@ GO_VERSION := $(shell go version 2>/dev/null | awk '{print $$3}' || echo "unknow
 
 # Fully-qualified import path for the project (build-metadata) package
 # targeted by ldflags.
-VERSION_PKG := $(MODULE_PATH)/project
+VERSION_PKG := $(MODULE_PATH)/internal/project
 
 # Coverage
 COVERAGE_FILE := coverage.out

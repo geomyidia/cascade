@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/geomyidia/cascade/project"
+	"github.com/geomyidia/cascade/internal/project"
 )
 
 // Layer 1: in-process unit tests of run(). These own the package's
@@ -120,7 +120,7 @@ func TestCascadeBinaryVersion(t *testing.T) {
 	binPath := filepath.Join(tmp, binName)
 
 	const (
-		versionPkg      = "github.com/geomyidia/cascade/project"
+		versionPkg      = "github.com/geomyidia/cascade/internal/project"
 		injectedVersion = "test-1.0.0"
 		injectedCommit  = "abcdef0"
 		injectedBranch  = "test-branch"

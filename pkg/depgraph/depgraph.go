@@ -3,7 +3,7 @@ package depgraph
 import (
 	"sort"
 
-	"github.com/geomyidia/cascade/golist"
+	"github.com/geomyidia/cascade/pkg/golist"
 )
 
 // Graph is a directed import graph constructed from a slice of

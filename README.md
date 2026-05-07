@@ -67,9 +67,9 @@ cascade's pure-core packages are exported public APIs. If you want to build your
 import (
     "context"
 
-    "github.com/geomyidia/cascade/changeset"
-    "github.com/geomyidia/cascade/depgraph"
-    "github.com/geomyidia/cascade/golist"
+    "github.com/geomyidia/cascade/pkg/changeset"
+    "github.com/geomyidia/cascade/pkg/depgraph"
+    "github.com/geomyidia/cascade/pkg/golist"
 )
 
 ctx := context.Background()

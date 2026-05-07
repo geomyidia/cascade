@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/geomyidia/cascade/golist"
+	"github.com/geomyidia/cascade/pkg/golist"
 )
 
 // sampleModulePath returns the absolute path to the sample-module

@@ -9,7 +9,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/geomyidia/cascade/project"
+	"github.com/geomyidia/cascade/internal/project"
 )
 
 func main() {
