@@ -12,12 +12,6 @@
 
 cascade computes the affected-package set for a Go CI test-selection workflow: given a base ref and a head ref, it prints the set of packages that need re-testing — the changed packages plus everything that imports them, transitively. The intended use is dropping the full-suite test bill on a typical PR by 3-10× while keeping merge-queue runs honest.
 
-## Status
-
-**Pre-v0.1.0; under active development.** The high-level project plan and per-milestone design docs live in [`docs/design/01-draft/`](docs/design/01-draft/). The CLI binary builds today but does not yet compute anything — see the [milestone status](#milestones) below for what's wired up. API and CLI surfaces will iterate freely until v1.0; once tagged, v1.x will commit to standard Go module compatibility, with breaking changes thereafter following Go's `vN/` directory convention.
-
-`cascade --version` reports the embedded module version from [`project/VERSION`](project/VERSION) and, for `go install`-built binaries (where the Makefile's `-ldflags` injection isn't applied), auto-detects commit/dirty/timestamp metadata via `runtime/debug.ReadBuildInfo`. Full Makefile builds inject branch + git-describe summary on top of that.
-
 ## Why
 
 cascade exists because [DigitalOcean's `gta`](https://github.com/digitalocean/gta) — an established Go affected-package tool — silently fails on Go 1.25.x. The failure surfaces in `golang.org/x/tools/go/packages.Load`, which gta uses; that loader's stricter module resolution emits "go: updates to go.mod needed" against modules the regular `go list` family considers tidy, and gta swallows the error and exits 0 with an empty package list. An empty list means CI runs zero tests; zero tests means a green build that proved nothing.
