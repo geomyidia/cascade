@@ -16,7 +16,7 @@ cascade computes the affected-package set for a Go CI test-selection workflow: g
 
 cascade exists because [DigitalOcean's `gta`](https://github.com/digitalocean/gta) — an established Go affected-package tool — silently fails on Go 1.25.x. The failure surfaces in `golang.org/x/tools/go/packages.Load`, which gta uses; that loader's stricter module resolution emits "go: updates to go.mod needed" against modules the regular `go list` family considers tidy, and gta swallows the error and exits 0 with an empty package list. An empty list means CI runs zero tests; zero tests means a green build that proved nothing.
 
-Go's helper libraries — especially `golang.org/x/tools/go/packages` — evolve faster than the `go` command itself; depending on the CLI tool is the more stable bet. cascade takes a deliberately narrower path than gta: shell out to `go list -deps -json` directly (verified on Go 1.25 and 1.26), parse the stream into typed values, build the import DAG, reverse the edges, and compute the closure of the change-set. Every io error is returned and surfaced — silent-failure mode is structurally impossible.
+Go's helper libraries — especially `golang.org/x/tools/go/packages` — evolve faster than the `go` command itself; depending on the CLI tool is the more stable bet. cascade takes a deliberately narrower path than gta: shell out to `go list -deps -json` directly (verified on Go 1.25 and 1.26), parse the stream into typed values, build the import DAG, reverse the edges, and compute the closure of the change-set. Every I/O error is returned and surfaced — silent-failure mode is structurally impossible.
 
 ## Install
 
@@ -109,7 +109,7 @@ seeds := changeset.Resolve(changedFiles, pkgs, changeset.WithModuleRoot(repoRoot
 affected := g.RevDepClosure(seeds)
 ```
 
-The pure packages (`pkg/golist`, `pkg/depgraph`, `pkg/changeset`) compose without adapter glue and are 100% test-covered. Errors from the io edges (`golist.Run`'s `go list` invocation; `changeset.Resolve`'s optional `os.Getwd` fallback) wrap their causes with `%w`, so callers can use `errors.Is`/`errors.As` to triage.
+The pure packages (`pkg/golist`, `pkg/depgraph`, `pkg/changeset`) compose without adapter glue and are 100% test-covered. Errors from the I/O edges (`golist.Run`'s `go list` invocation; `changeset.Resolve`'s optional `os.Getwd` fallback) wrap their causes with `%w`, so callers can use `errors.Is`/`errors.As` to triage.
 
 ## How it works
 
@@ -119,7 +119,7 @@ The pure packages (`pkg/golist`, `pkg/depgraph`, `pkg/changeset`) compose withou
 4. **Map the changed file paths to the packages that contain them.** These become the seed set.
 5. **BFS from the seeds over the reversed graph**; emit the union (seeds included), sorted lexicographically for determinism.
 
-Every step is small, typed, and tested. The only io is the two `os/exec` calls in steps 1 and 2 — both are isolated in the io shell, so the algorithmic core has no error-swallowing surface area.
+Every step is small, typed, and tested. The only I/O is the two `os/exec` calls in steps 1 and 2 — both are isolated in the I/O shell, so the algorithmic core has no error-swallowing surface area.
 
 ## Development
 
