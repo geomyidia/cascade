@@ -19,6 +19,7 @@
 - [ ] New/changed exported symbols have godoc comments
 - [ ] Tests added/updated for behavior changes (table-driven where applicable)
 - [ ] No public-API breakage (or if there is, it's flagged below)
+- [ ] If this PR closes a milestone ledger, each row's planned evidence text matches the criterion text (per M2 retro carry-forward)
 
 ## Breaking change?
 

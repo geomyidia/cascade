@@ -30,6 +30,13 @@ COVERAGE_FILE := coverage.out
 COVERAGE_HTML := coverage.html
 COVERAGE_THRESHOLD := 90
 
+# Lint cache: a fresh directory per `make lint` invocation so local lint
+# behaviour matches CI's cold-cache behaviour. Cost: ~5–10s extra per run.
+# Justification: M1 and M2 both shipped lint failures that passed locally
+# with stale cache (see retrospectives 0001 and 0002). Falls back to
+# /tmp/cascade-lint-cache when mktemp's -t flag isn't supported.
+LINT_CACHE_DIR := $(shell mktemp -d -t cascade-lint-cache.XXXXXX 2>/dev/null || echo /tmp/cascade-lint-cache)
+
 # List of binaries to build and install (matches subdirectories under cmd/)
 BINARIES := cascade
 
@@ -268,9 +275,9 @@ lint:
 	@echo "$(CYAN)• Running go vet...$(RESET)"
 	@go vet ./...
 	@echo "$(GREEN)✓ go vet passed$(RESET)"
-	@echo "$(CYAN)• Running golangci-lint...$(RESET)"
+	@echo "$(CYAN)• Running golangci-lint (cache: $(LINT_CACHE_DIR))...$(RESET)"
 	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./...; \
+		GOLANGCI_LINT_CACHE=$(LINT_CACHE_DIR) golangci-lint run ./...; \
 		echo "$(GREEN)✓ golangci-lint passed$(RESET)"; \
 	else \
 		echo "$(YELLOW)⊙ golangci-lint not installed, skipping$(RESET)"; \
