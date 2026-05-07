@@ -134,7 +134,63 @@ Walked F-1..F-22:
 
 ## CDC review notes
 
-_Pending. To be filled in by CDC after independent verification per `LEDGER_DISCIPLINE.md` CDC protocol._
+CDC pass run against `m5/cli-main-wiring` head `c45291e` plus retro `9792d5f`. Sandbox has no `go` toolchain so the toolchain rows (F-3, F-5..F-12, F-15..F-17, F-21) stay CC-attested via local + CI green; structural rows verifiable by direct read are re-checked.
+
+**Verified directly by CDC (per-row reproduction):**
+
+- **F-1, F-4** (file existence + main one-liner): `internal/cli/doc.go` exists with `// Package cli` first comment line; `cmd/cascade/main.go` is 16 lines, well under the F-4 threshold of 20, with `os.Exit(cli.Run(...))` as the load-bearing call.
+- **F-2** (`Run` signature): direct read of `internal/cli/cli.go:112` confirms `func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int` — exact match to the spec.
+- **F-3** (`*GitDiffError` + `ErrGitDiffFailed` exported): `internal/cli/errors.go:15` (`var ErrGitDiffFailed`), `:24` (`type GitDiffError struct`), with `Error()` / `Is()` / `Unwrap()` methods at `:44`, `:54`, `:61`. Mirrors `pkg/golist`'s `*ExitError` shape exactly.
+- **F-13** (per-package coverage gate at 100% on `internal/cli`): `scripts/coverage-check.sh`'s `PACKAGES` array now lists five paths (golist, depgraph, changeset, internal/project, internal/cli) at threshold 100 each. Verified by direct read of the script.
+- **F-14** (no non-stdlib imports): `internal/cli/cli.go`'s import block (lines 3–19) lists nine stdlib packages plus four cascade packages (`internal/project`, `pkg/changeset`, `pkg/depgraph`, `pkg/golist`); `errors.go` and `seam.go` import only stdlib. `go.mod` has zero `require` entries — verified.
+- **F-20** (README updated): direct read confirms `README.md` now has a Flag reference table (7 rows, columns Flag/Default/Purpose) and an Exit codes table (6 rows, codes 0–5 inclusive) plus a closing paragraph explicitly mentioning *"branch on the specific exit code"*. The CLI-usage section's three-tier story (basic invocation → output piping → stdin variant) is preserved from the M2/M4 design narrative.
+- **F-22** (substrate enumeration): the §"Substrate loaded at session start" section names seven guides with cited pattern IDs across EH, CC, AP, API, TE, DC clusters. Strongest substrate enumeration of the run; the AP-* anti-patterns avoided list is concrete (not vague), and pattern-IDs are cross-linked to where they apply (e.g., AP-11's "skip 'failed to' prefixes" matches the actual error-message style in the code).
+
+**CC-attested via CI green / local run (not re-runnable in sandbox):**
+
+F-5 (flag parsing), F-6 (pipeline integration), F-7 (git diff failure → exit 2), F-8 (go list failure → exit 3), F-9 (stdin mode), F-10 (empty result → exit 0), F-11 (context cancellation under `-race`), F-12 (10-run determinism), F-15 (`cascade --help` output), F-16 (`cascade --version` output), F-17 (end-to-end binary smoke), F-21 (`go doc` rendering). All called out with reproducible Verify command output in the retro's row walk.
+
+**Two deferrals are structurally valid, not softpedals.**
+
+F-18 (`go install …@<sha>`) requires a merged commit on `main` so `proxy.golang.org` can index the SHA. F-19 (manual sanity check on a real Go module) requires the same — cascade has to be installable for the closing-evidence sanity check to make sense. Both rows have:
+- **Reason:** structurally impossible pre-merge (proxy.golang.org doesn't index unmerged refs).
+- **Re-entry condition:** PR merge to `main`. CC re-runs `go install` post-merge for F-18 and the manual sanity check for F-19; both append follow-up sections to this retro.
+
+Per `LEDGER_DISCIPLINE.md`'s definition (*"deferred requires a reason and a re-entry condition"*), both rows meet the bar. This is the M2 F-18 pattern's natural extension to the integration milestone — same shape, same closing protocol.
+
+**Two new seams beyond the spec, both well-justified:**
+
+`runGoListWrapper = golist.Run` (cli.go:87) — `pkg/golist`'s own `runGoList` seam is package-private; cli's tests can't replace it across the package boundary. cli's wrapper provides cli's own injection point so pipeline tests can drive the pipeline with synthetic package data. Defensible: not scope creep, structural necessity for in-process pipeline testing.
+
+`signalContext = signal.NotifyContext` (cli.go:93) — stdlib's `signal.NotifyContext` returns a real ctx that listens for actual SIGINT/SIGTERM. Testing cancellation in-process requires either sending real signals to the test process (flaky, OS-dependent) or replacing the constructor. The seam is the cleaner answer.
+
+Both seams follow the established `var name = realImpl` package-level convention used by M2 (`runGoList`), M4 (`getCwd`), and M5 (`runGitDiff`). **Five seams across the codebase now; the pattern is settled.** Each rationale is documented inline at the seam definition, so future contributors can read the *why* without reconstruction.
+
+**No softpedals identified.** The pre-PR self-check walked all 22 rows; CDC's independent re-read finds the same conclusion. F-18 and F-19 are clean deferrals with re-entry conditions, not softpedalled `done`s.
+
+**No silent drops.** Spec ledger had 22 rows, all 22 accounted for in the retro's ledger walk: 20 closed, 2 deferred-with-condition. Row-count check: 22 declared / 22 accounted.
+
+**`runPipeline` is conceptually four operations** (golist.Run → depgraph.Build → changeset.Resolve → RevDepClosure) — the actual function body is 7 lines counting the error-handling line. CC's "literally four lines" claim is approximate but the structural property holds: no adapter functions, no shape mismatches between producer and consumer types, no glue layer. M4 retro's *"trio composes without adapter code"* claim is verified at the integration layer.
+
+**`mapError` ordering is the right call.** Cancellation is checked *first* (cli.go:293–295) so a SIGINT received mid-pipeline maps to exit 5 even when a downstream io error (git or go list) was also captured. Without this ordering, a user who cancels during go list would see "exit 3 (go list failed)" instead of "exit 5 (cancelled)" — the former is misleading. The doc comment at line 287–288 makes the ordering explicit; the `TestMapError` row in `seam_test.go:321` covers the precedence.
+
+**Engineering observations worth carrying forward:**
+
+The `errFlagOrInput` sentinel as a category-error wrapper for input-related failures (parseFlags errors, validateConfig errors, scanLines failures, file-open failures) is a clean pattern. One sentinel covers four error sources; `mapError` reads the sentinel via `errors.Is` to map the entire category to exit 1 in one branch. Reusable for future packages that need to map a heterogeneous set of failures to a single category.
+
+The GNU-convention `--help` routing — `cfg.showHelp == true` (explicit flag) writes to stdout, parse failures write to stderr per stdlib `flag`'s default — gets the user-facing UX right. Both go through the same `helpText` constant so the content is identical regardless of routing. The constant's "keep in sync with README.md" comment is the right kind of forcing-function for source-of-truth-in-two-places content.
+
+The five-seam pattern across the codebase is now textbook. Future packages with single io edges should reach for this idiom by default; the M2/M4/M5 precedents make it the established convention. Worth a CONTRIBUTING.md mention if it isn't already there.
+
+**Closure recommendation: M5 is mergeable.**
+
+All structural rows verified directly. All toolchain rows CC-attested via local + CI green. Two deferrals are structurally valid with re-entry conditions. The `runPipeline` four-operation composition is verified. The exit-code contract is implemented with the right precedence. The new seams are documented with rationale. The substrate enumeration is the strongest of any milestone retro to date.
+
+After M5 merges, the F-18 + F-19 follow-up appends to this retrospective close out the formally-deferred rows; M6 (the `v0.1.0` release milestone) is the natural successor.
+
+**One small forward-looking observation (not a finding for M5):**
+
+The five-seam pattern is now established convention but isn't yet mentioned in `CONTRIBUTING.md`. Worth a one-paragraph addition under "code conventions" — *"For packages with a single io edge, follow the function-variable seam pattern (see pkg/golist/seam.go and pkg/changeset for examples). Convention: declare `var name = realImpl` at package level; tests in `seam_test.go` use a `withNameSeam(t, fn)` helper that swaps the impl and restores via `t.Cleanup`."* Could land alongside the F-18/F-19 follow-up commits or as a small standalone fix in the M6 release-prep window. Not blocking M5.
 
 ## Carry-forward into M6 (`v0.1.0` release)
 
