@@ -98,7 +98,46 @@ No softpedals identified at self-check.
 
 ## CDC review notes
 
-_Pending. To be filled in by CDC after independent verification per `LEDGER_DISCIPLINE.md` CDC protocol._
+CDC pass run against `m4/changeset-mapping` head `75617a2` plus the retro fix-up `f78dcb9`. Sandbox has no `go` toolchain so the toolchain rows (F-3..F-13's test-passes, F-13's `go doc` rendering) stay CC-attested via local + CI green; structural rows reproducible by direct read are re-checked.
+
+**Specifically verified per the user's pre-CDC asks:**
+
+The options pattern is correctly implemented. `Option` is a function-type alias `func(*config)` (changeset.go:14), `config` is unexported with `moduleRoot` + `moduleRootSet` fields (lines 18–21), and `WithModuleRoot` is a closure-returning constructor that sets *both* fields (lines 35–40). The `moduleRootSet` flag is a meaningful design touch — it distinguishes "user passed `WithModuleRoot("")`" (treat as explicitly empty; relative paths silently fail) from "user passed nothing" (fall back to `os.Getwd`). This addresses the open question I raised in the M4 spec's Q2 ("behaviour when `moduleRoot == ""` and `changedFiles` contains relative paths") more precisely than my own design lean did, and the doc comment at lines 31–34 names the distinction explicitly. Above-spec design quality.
+
+Pure functional use in testing is achievable through two independent mechanisms, both verified directly:
+
+- **Pass `WithModuleRoot(...)` explicitly** — every test in `changeset_test.go` does this, so the os.Getwd path is never reached and tests are fully deterministic on path inputs only. Verified at every `Resolve(...)` call site in the table-driven cases.
+- **Replace `getCwd` via the function-variable seam** — `var getCwd = os.Getwd` (changeset.go:46) is replaceable by tests through the `withCwdSeam(t, fn)` helper (seam_test.go:12–17). `TestResolve_DefaultUsesGetCwd` exercises the success branch with a stub returning `/stub/cwd`; `TestResolve_GetCwdErrorTolerated` exercises the error branch with a synthetic error AND verifies that absolute paths still resolve when the seam returns an error. Both branches give pure, deterministic test outcomes that don't depend on the actual cwd at test-run time.
+
+The seam pattern is structurally identical to M2's `runGoList` (both are `var seam = realImpl` package-level function variables, replaceable by tests, restored via `t.Cleanup`). The reusability claim from the M4 retro's "What Worked" section holds.
+
+**Verified directly by CDC (per-row reproduction):**
+
+- **F-1** (doc.go updated, package comment preserved): direct read of `pkg/changeset/doc.go` confirms `// Package changeset` line at top; body content updated per disclosed amendment #3 to describe the io edge + seam.
+- **F-2** (Resolve signature): direct read of changeset.go:96 confirms `func Resolve(changedFiles []string, pkgs []golist.Package, opts ...Option) []string` — matches the *amended* spec (functional option), diverges from the *original* spec text (positional). The disclosed amendment is clean and the active spec's F-2 verify text needs updating at next ODM promotion, as the retro flags.
+- **F-9** (removed-file mapping): direct read of changeset.go:138–141 confirms the parent-dir lookup is purely lexical (`filepath.Dir(abs)` looked up in `dirMap`) — no file-existence check anywhere, so removed Go files map correctly.
+- **F-12** (no non-stdlib imports beyond own module): direct read of changeset.go:3–10 confirms imports are `os`, `path/filepath`, `sort`, `strings` from stdlib + `pkg/golist` from own module. `go.mod` has zero `require` entries, so `go list -m all | wc -l` yields 1.
+- **F-14** (closing report attestation): the substrate-loaded section above enumerates seven guides with pattern IDs cited (AP-29/30/36/40/44/52, API-42, TD-09/17, IM-01, TE-01..08/15/43, DC-01/02). That's the load-bearing artifact for this row.
+
+**CC-attested via CI green / local run (not re-runnable in sandbox):**
+
+F-3 (16-case StandardCases pass), F-4 (HandTraceable 7 cases), F-5 (PathNormalisation 5 cases), F-6 (_test.go mapping subtest), F-7 (mixed go/non-go subtest), F-8 (Go-file-outside subtest), F-10 (-count=10 determinism), F-11 (per-package coverage gate at 100%), F-13 (`go doc` rendering). All called out with `ok ...0.Xs` evidence in the retro's row walk. The "100% coverage on first try, with no test contortions" claim in §"What Worked" is consistent with the structural read: every branch in the production code (the four early-skip branches + the two map-build defensive skips + the two getCwd branches) has a named test.
+
+**No softpedals identified.** The pre-PR self-check walked all fourteen rows and named the two evidence-vs-criterion shape differences (F-1 doc.go body change, F-2 signature drift) as disclosed amendments rather than soft-passing. CDC's independent re-read finds the same conclusion: both differences are honest amendments traced to plan-mode user decisions, both flagged for the spec's next ODM promotion.
+
+**No silent drops.** Spec ledger declared 14 rows, all 14 present in the retro's ledger walk, all 14 closed. Row count check: 14 declared / 14 closed.
+
+**Substrate enumeration is consistent with the M3 retro's pattern.** The cited Go-guide pattern IDs (AP-* + API-42 + TD-09/17 + IM-01 + TE-* + DC-*) are concrete and traceable. The retro names AP-52 (filepath confinement) as "informational; M4 doesn't open files but the prefix-check pattern is documented for any future file-content variant" — that's the right kind of forward-looking citation: load-bearing-now-or-relevant-later, named not silent.
+
+**Engineering observations worth carrying forward to retros' What-Worked corpus (in addition to CC's retro entries):**
+
+- The `moduleRootSet` flag — making "not set" distinguishable from "explicitly empty" — is a worth-recording API-design pattern. Functional options in Go often miss this distinction; M4's implementation captures it cleanly. Reusable when an option's zero value is semantically meaningful.
+- The plan-mode `AskUserQuestion` round-trip on the open spec questions (Q1 + Q2) directly produced this design. The retro's §"What Worked" already names this pattern; CDC affirms it as a method that surfaces design-affecting decisions before code is written, when the cost of a design wrong-turn is highest.
+- The `package changeset_test` (external) + `package changeset` in `seam_test.go` (internal) two-file convention is now established across two packages (`pkg/golist`, `pkg/changeset`). Future packages with internal seams should follow this layout by default.
+
+**Closure recommendation: M4 is mergeable.** All 14 ledger rows have evidence of the right shape. The three disclosed amendments are clean. The substrate enumeration meets F-14. The options pattern is correctly implemented and the seam-based pure-testing path is verified directly. The trio of pure packages (`pkg/golist`, `pkg/depgraph`, `pkg/changeset`) compose without adapter code, as the retro's §"Closure summary" claims — `Resolve`'s `[]string` return matches `RevDepClosure`'s `seeds []string` parameter exactly.
+
+**Forward-looking note (carry-forward, not a finding for M4):** the active M4 spec's F-2 verify text references the original positional `moduleRoot string` signature; should be updated at next ODM promotion to match the functional-option form actually shipped. The retro flags this; surfacing it again here so it doesn't get lost in the M5 ramp-up.
 
 ## Carry-forward into M5
 
