@@ -20,9 +20,9 @@ cascade computes the affected-package set for a Go CI test-selection workflow: g
 
 ## Why
 
-cascade exists because [DigitalOcean's `gta`](https://github.com/digitalocean/gta) — the established Go affected-package tool — silently fails on Go 1.25.x. The failure surfaces in `golang.org/x/tools/go/packages.Load`, which gta uses; that loader's stricter module resolution emits "go: updates to go.mod needed" against modules the regular `go list` family considers tidy, and gta swallows the error and exits 0 with an empty package list. An empty list means CI runs zero tests; zero tests means a green build that proved nothing.
+cascade exists because [DigitalOcean's `gta`](https://github.com/digitalocean/gta) — an established Go affected-package tool — silently fails on Go 1.25.x. The failure surfaces in `golang.org/x/tools/go/packages.Load`, which gta uses; that loader's stricter module resolution emits "go: updates to go.mod needed" against modules the regular `go list` family considers tidy, and gta swallows the error and exits 0 with an empty package list. An empty list means CI runs zero tests; zero tests means a green build that proved nothing.
 
-cascade takes a deliberately narrower path: shell out to `go list -deps -json` directly (verified to work on Go 1.25 and 1.26), parse the stream into typed values, build the import DAG, reverse the edges, and compute the closure of the change-set. Every io error is returned and surfaced — silent-failure mode is structurally impossible.
+Do the the Go language's tendency to swap out libraries for changes in tooling, treating the tool as "the API" is often the safer, more stable approach. Thus, cascade takes a deliberately narrower path than gta: shell out to `go list -deps -json` directly (verified to work on Go 1.25 and 1.26), parse the stream into typed values, build the import DAG, reverse the edges, and compute the closure of the change-set. Every io error is returned and surfaced — silent-failure mode is structurally impossible.
 
 ## Install
 
