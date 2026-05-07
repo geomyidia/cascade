@@ -16,7 +16,7 @@ cascade computes the affected-package set for a Go CI test-selection workflow: g
 
 cascade exists because [DigitalOcean's `gta`](https://github.com/digitalocean/gta) — an established Go affected-package tool — silently fails on Go 1.25.x. The failure surfaces in `golang.org/x/tools/go/packages.Load`, which gta uses; that loader's stricter module resolution emits "go: updates to go.mod needed" against modules the regular `go list` family considers tidy, and gta swallows the error and exits 0 with an empty package list. An empty list means CI runs zero tests; zero tests means a green build that proved nothing.
 
-Do the the Go language's tendency to swap out libraries for changes in tooling, treating the tool as "the API" is often the safer, more stable approach. Thus, cascade takes a deliberately narrower path than gta: shell out to `go list -deps -json` directly (verified to work on Go 1.25 and 1.26), parse the stream into typed values, build the import DAG, reverse the edges, and compute the closure of the change-set. Every io error is returned and surfaced — silent-failure mode is structurally impossible.
+Go's helper libraries — especially `golang.org/x/tools/go/packages` — evolve faster than the `go` command itself; depending on the CLI tool is the more stable bet. cascade takes a deliberately narrower path than gta: shell out to `go list -deps -json` directly (verified on Go 1.25 and 1.26), parse the stream into typed values, build the import DAG, reverse the edges, and compute the closure of the change-set. Every io error is returned and surfaced — silent-failure mode is structurally impossible.
 
 ## Install
 
@@ -24,7 +24,7 @@ Do the the Go language's tendency to swap out libraries for changes in tooling, 
 go install github.com/geomyidia/cascade/cmd/cascade@latest
 ```
 
-Requires Go ≥ 1.25.3. CI tests against the floor and the latest currently-supported Go major (1.26.x as of this writing).
+Requires Go ≥ 1.25.3. CI tests against the floor and the latest currently-supported Go major; the matrix advances with each Go release.
 
 ## CLI usage
 
@@ -62,7 +62,7 @@ git diff --name-only origin/main..HEAD | cascade --changed-files=-
 | `--head` | `HEAD` | Head git ref. |
 | `--changed-files` | (none) | Path to a file with one change-set entry per line. `-` reads from stdin. When set, `--base` is not required and `git diff` is not invoked. |
 | `--root` | `.` | Working directory for `go list` and module-root for `changeset.Resolve`. |
-| `--version` | false | Print version metadata (Version / GitCommit / GitBranch / BuildDate) and exit. |
+| `--version` | false | Print `cascade <Version> (build <Branch>@<Commit>, <BuildDate>)` and exit. (Branch is empty for `go install` builds — the module proxy doesn't carry branch metadata.) |
 | `--help` | false | Print usage and exit. Routes to stdout per GNU convention; flag-parse errors route help to stderr per stdlib `flag` default. |
 
 ### Exit codes
@@ -101,13 +101,15 @@ if err != nil { /* handle, never swallow */ }
 g := depgraph.Build(pkgs)
 
 // Map changed file paths onto their containing packages' import paths.
-seeds := changeset.Resolve(changedFiles, pkgs)
+// repoRoot is typically `git rev-parse --show-toplevel` from the caller;
+// when omitted, changeset.Resolve falls back to os.Getwd.
+seeds := changeset.Resolve(changedFiles, pkgs, changeset.WithModuleRoot(repoRoot))
 
 // Compute the reverse-transitive closure (the "cascade").
 affected := g.RevDepClosure(seeds)
 ```
 
-The pure packages (`golist`, `depgraph`, `changeset`) have no io between them and are 100% test-covered. Errors from the io shell (`golist.Run`) wrap their causes with `%w`, so callers can use `errors.Is`/`errors.As` to triage.
+The pure packages (`pkg/golist`, `pkg/depgraph`, `pkg/changeset`) compose without adapter glue and are 100% test-covered. Errors from the io edges (`golist.Run`'s `go list` invocation; `changeset.Resolve`'s optional `os.Getwd` fallback) wrap their causes with `%w`, so callers can use `errors.Is`/`errors.As` to triage.
 
 ## How it works
 
