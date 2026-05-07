@@ -125,19 +125,6 @@ The pure packages (`golist`, `depgraph`, `changeset`) have no io between them an
 
 Every step is small, typed, and tested. The only io is the two `os/exec` calls in steps 1 and 2 — both are isolated in the io shell, so the algorithmic core has no error-swallowing surface area.
 
-## Milestones
-
-| | Milestone | Status |
-|---|---|---|
-| M1 | Repo scaffold + CI baseline | completed |
-| M2 | `go list` adapter (shell-out + streaming JSON parser) | completed |
-| M3 | Dep graph + reverse-dep index + closure | in progress |
-| M4 | Changed-files-to-packages mapping | not started |
-| M5 | CLI + main wiring | not started |
-| M6 | `v0.1.0` release | not started |
-
-Detailed plans live in [`docs/design/01-draft/`](docs/design/01-draft/). The high-level plan is [`0001-cascade-high-level-project-plan.md`](docs/design/01-draft/0001-cascade-high-level-project-plan.md); each milestone has (or will have) its own design doc.
-
 ## Development
 
 The project ships a `Makefile` that's the canonical menu of common commands:
