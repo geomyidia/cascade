@@ -6,8 +6,8 @@ This index is automatically generated. Do not edit manually.
 
 | Number | Title | State | Updated |
 |--------|-------|-------|----------|
-| 0006 | Implementation Plan: M4 — `pkg/changeset` (Changed-Files-to-Packages Mapping) | Active | 2026-05-07 |
-| 0005 | M4: `changeset` (Changed-Files-to-Packages Mapping) | Active | 2026-05-07 |
+| 0006 | M5: CLI + Main Wiring | Active | 2026-05-07 |
+| 0005 | M4: `changeset` (Changed-Files-to-Packages Mapping) | Final | 2026-05-07 |
 | 0004 | M3: `depgraph` (Reverse-Dep Closure) | Final | 2026-05-07 |
 | 0003 | M2: `golist` Adapter | Final | 2026-05-06 |
 | 0002 | M1: Repo Scaffold + CI Baseline | Final | 2026-05-06 |
@@ -17,11 +17,11 @@ This index is automatically generated. Do not edit manually.
 
 ### Active
 
-- [0006 - Implementation Plan: M4 — `pkg/changeset` (Changed-Files-to-Packages Mapping)](05-active/0006-implementation-plan-m4-pkgchangeset-changed-files-to-packages-mapping.md)
-- [0005 - cascade — M4: `changeset` (Changed-Files-to-Packages Mapping)](05-active/0005-cascade-m4-changeset-changed-files-to-packages-mapping.md)
+- [0006 - cascade — M5: CLI + Main Wiring](05-active/0006-cascade-m5-cli-main-wiring.md)
 
 ### Final
 
+- [0005 - M4: `changeset` (Changed-Files-to-Packages Mapping)](06-final/0005-cascade-m4-changeset-changed-files-to-packages-mapping.md)
 - [0004 - M3: `depgraph` (Reverse-Dep Closure)](06-final/0004-cascade-m3-depgraph-reverse-dep-closure.md)
 - [0003 - cascade — M2: `golist` Adapter](06-final/0003-cascade-m2-golist-adapter.md)
 - [0002 - M1: Repo Scaffold + CI Baseline](06-final/0002-m1-repo-scaffold-ci-baseline.md)
