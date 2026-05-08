@@ -477,7 +477,7 @@ release-notes: $(WORKBENCH)
 		echo "$(YELLOW)⚠ Release notes already exist at $(RELEASE_NOTES)$(RESET)"; \
 		echo "$(CYAN)→ This target will not overwrite an existing file. Edit it directly if needed.$(RESET)"; \
 	else \
-		printf '# v%s -- Release Notes\n\n## Overview\n\nTBD\n\n## Details\n\nTBD\n\n## Change Log\n\n [%s..%s](%s/compare/%s...v%s)\n\n' \
+		printf '# v%s - Release Notes\n\n## Overview\n\nTBD\n\n## Details\n\nTBD\n\n## Change Log\n\n [%s..%s](%s/compare/%s...v%s)\n\n' \
 			"$(VERSION)" "$(LAST_VERSION)" "$(VERSION)" "$(GH_PROJECT_URL)" "$(LAST_VERSION)" "$(VERSION)" \
 			> $(RELEASE_NOTES); \
 		echo "$(GREEN)✓ Generated placeholder release notes at $(RELEASE_NOTES)$(RESET)"; \
