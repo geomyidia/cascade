@@ -14,7 +14,7 @@ CODE_NAME := "cascade"
 MODULE_PATH := github.com/geomyidia/cascade
 BIN_DIR := ./bin
 MODE := debug
-VERSION := $(shell cat internal/project/VERSION 2>/dev/null || echo "unknown")
+override VERSION := $(shell cat internal/project/VERSION 2>/dev/null || echo "unknown")
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 GIT_SUMMARY := $(shell git describe --tags --dirty --always 2>/dev/null || echo "untagged")
@@ -63,6 +63,12 @@ REMOTE_macpro := ssh://macpro.local:23231/geomyidia/$(CODE_NAME).git
 REMOTE_github := git@github.com:geomyidia/$(CODE_NAME).git
 REMOTE_codeberg := ssh://git@codeberg.org/geomyidia/$(CODE_NAME).git
 
+# Release configuration
+WORKBENCH = ./workbench
+RELEASE_NOTES = $(WORKBENCH)/release-notes-$(VERSION).md
+LAST_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+GH_PROJECT_URL := https://$(MODULE_PATH)
+
 
 # Default target
 .DEFAULT_GOAL := help
@@ -104,7 +110,8 @@ help:
 	@echo ""
 	@echo "$(GREEN)Releasing:$(RESET)"
 	@echo "  $(YELLOW)make release-dry-run$(RESET)  - Verify module is ready to tag (tidy + lint + test + build)"
-	@echo "  $(YELLOW)make release VERSION=v0.1.0$(RESET) - Tag a release and push tag to all remotes"
+	@echo "  $(YELLOW)make release-notes$(RESET)    - Generate placeholder release notes for the current VERSION"
+	@echo "  $(YELLOW)make release$(RESET)          - Tag, push to all remotes, and (if release-notes exist) create a GitHub release"
 	@echo ""
 	@echo "$(GREEN)Utilities:$(RESET)"
 	@echo "  $(YELLOW)make push$(RESET)             - Push to all configured remotes"
@@ -428,12 +435,27 @@ release-dry-run:
 	@echo "$(BLUE)Verifying module is ready for release...$(RESET)"
 	@echo "$(CYAN)• Checking go.mod is tidy...$(RESET)"
 	@go mod tidy
-	@if ! git diff --quiet go.mod go.sum 2>/dev/null; then \
+	@# Use `git status --porcelain` instead of `git diff --quiet`: porcelain
+	@# tolerates missing paths (cascade is stdlib-only, so go.sum may not
+	@# exist) and isn't fooled by stat-cache staleness when `go mod tidy`
+	@# bumps mtime without changing content.
+	@status=$$(git status --porcelain -- go.mod go.sum 2>/dev/null); \
+	if [ -n "$$status" ]; then \
 		echo "$(RED)✗ go.mod/go.sum changed after 'go mod tidy' — commit before releasing$(RESET)"; \
-		git --no-pager diff go.mod go.sum; \
+		echo "$$status"; \
+		git --no-pager diff -- go.mod go.sum 2>/dev/null || true; \
 		exit 1; \
 	fi
 	@echo "$(GREEN)✓ Module is tidy$(RESET)"
+	@echo "$(CYAN)• Checking for release notes...$(RESET)"
+	@if [ -f $(RELEASE_NOTES) ]; then \
+		echo "$(GREEN)✓ Release notes found at $(RELEASE_NOTES)$(RESET)"; \
+		echo "$(CYAN)  These will be used to auto-create a GitHub release during 'make release'.$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠ No release notes at $(RELEASE_NOTES)$(RESET)"; \
+		echo "$(YELLOW)  Without this file, 'make release' will only push the tag — no GitHub release will be created.$(RESET)"; \
+		echo "$(YELLOW)  Run 'make release-notes' to generate a placeholder if you want one.$(RESET)"; \
+	fi
 	@echo "$(CYAN)• Running lint...$(RESET)"
 	@$(MAKE) --no-print-directory lint
 	@echo "$(CYAN)• Running tests...$(RESET)"
@@ -442,31 +464,55 @@ release-dry-run:
 	@$(MAKE) --no-print-directory build-release
 	@echo ""
 	@echo "$(GREEN)✓ Module ready for release!$(RESET)"
-	@echo "$(CYAN)→ Run 'make release VERSION=vX.Y.Z' to tag and push$(RESET)"
+	@echo "$(CYAN)→ Run 'make release' to tag and push$(RESET)"
 	@echo ""
 
+# Workbench directory for release-prep artifacts (release notes, scratch docs).
+$(WORKBENCH):
+	@mkdir -p $(WORKBENCH)
+
+.PHONY: release-notes
+release-notes: $(WORKBENCH)
+	@if [ -f $(RELEASE_NOTES) ]; then \
+		echo "$(YELLOW)⚠ Release notes already exist at $(RELEASE_NOTES)$(RESET)"; \
+		echo "$(CYAN)→ This target will not overwrite an existing file. Edit it directly if needed.$(RESET)"; \
+	else \
+		printf '# v%s -- Release Notes\n\n## Overview\n\nTBD\n\n## Details\n\nTBD\n\n## Change Log\n\n [%s..%s](%s/compare/%s...v%s)\n\n' \
+			"$(VERSION)" "$(LAST_VERSION)" "$(VERSION)" "$(GH_PROJECT_URL)" "$(LAST_VERSION)" "$(VERSION)" \
+			> $(RELEASE_NOTES); \
+		echo "$(GREEN)✓ Generated placeholder release notes at $(RELEASE_NOTES)$(RESET)"; \
+		echo "$(CYAN)→ Edit the Overview / Details sections, commit the file, then run 'make release'.$(RESET)"; \
+	fi
+
 .PHONY: release
+release: VERS = v$(VERSION)
 release:
 	@echo ""
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════╗$(RESET)"
-	@echo "$(CYAN)║$(RESET) $(BLUE)Releasing $(PROJECT_NAME) $(VERSION)$(RESET)                                  $(CYAN)║$(RESET)"
+	@echo "$(CYAN)║$(RESET) $(BLUE)Releasing $(PROJECT_NAME) $(VERS)$(RESET)                                 $(CYAN)║$(RESET)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════╝$(RESET)"
 	@echo ""
 
-	@if [ -z "$(VERSION)" ]; then \
-		echo "$(RED)Error: VERSION variable not set$(RESET)"; \
-		echo "Usage: make release VERSION=v0.1.0"; \
+	@if [ "$(VERSION)" = "unknown" ]; then \
+		echo "$(RED)Error: VERSION variable not properly set: VERSION=$(VERSION)$(RESET)"; \
 		exit 1; \
 	fi
-	@case "$(VERSION)" in \
-		v[0-9]*.[0-9]*.[0-9]*) ;; \
-		*) echo "$(RED)Error: VERSION must be semver-prefixed with 'v' (e.g. v0.1.0)$(RESET)"; exit 1 ;; \
-	esac
-	@if git rev-parse "$(VERSION)" >/dev/null 2>&1; then \
-		echo "$(RED)Error: tag $(VERSION) already exists$(RESET)"; \
+
+	@# Refuse to release from a dirty tree: any modified, staged, or
+	@# untracked-but-not-gitignored file disqualifies. Otherwise the build
+	@# metadata embedded in the tagged binary would carry a -dirty suffix
+	@# and the tag would not reproduce the working tree at tag time.
+	@if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then \
+		echo "$(RED)Error: working tree has uncommitted changes — commit or stash before releasing$(RESET)"; \
+		git --no-pager status --short; \
 		exit 1; \
 	fi
-	@echo "$(YELLOW)⚠ This will tag $(VERSION) and push the tag to:$(RESET)"
+
+	@if git rev-parse "$(VERS)" >/dev/null 2>&1; then \
+		echo "$(RED)Error: tag $(VERS) already exists$(RESET)"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)⚠ This will tag $(VERS) and push the tag to:$(RESET)"
 	@for remote in $(GIT_REMOTES); do echo "    - $$remote"; done
 	@echo "$(YELLOW)⚠ Module proxies (proxy.golang.org) will index the tag automatically$(RESET)"
 	@echo ""
@@ -477,16 +523,29 @@ release:
 		exit 1; \
 	fi
 	@$(MAKE) --no-print-directory release-dry-run
-	@echo "$(BLUE)Creating annotated tag $(VERSION)...$(RESET)"
-	@git tag -a "$(VERSION)" -m "Release $(VERSION)"
-	@echo "$(GREEN)✓ Tagged $(VERSION)$(RESET)"
+	@echo "$(BLUE)Creating annotated tag $(VERS)...$(RESET)"
+	@git tag -a "$(VERS)" -m "Release $(VERS)"
+	@echo "$(GREEN)✓ Tagged $(VERS)$(RESET)"
 	@for remote in $(GIT_REMOTES); do \
 		echo "$(CYAN)• Pushing tag to $$remote...$(RESET)"; \
-		git push $$remote "$(VERSION)" && \
+		git push $$remote "$(VERS)" && \
 			echo "  $(GREEN)✓$(RESET) pushed" || \
 			{ echo "  $(RED)✗$(RESET) push to $$remote failed"; exit 1; }; \
 	done
+	@if [ -f $(RELEASE_NOTES) ]; then \
+		echo "$(BLUE)Creating GitHub release with notes from $(RELEASE_NOTES)...$(RESET)"; \
+		if gh release create "$(VERS)" --notes-file "$(RELEASE_NOTES)" --title "Release $(VERS)"; then \
+			echo "$(GREEN)✓ GitHub release created$(RESET)"; \
+		else \
+			echo "$(RED)✗ GitHub release creation failed$(RESET)"; \
+			echo "$(YELLOW)  Tag $(VERS) was still pushed; create the GH release manually if needed.$(RESET)"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "$(YELLOW)⚠ No release notes file found at $(RELEASE_NOTES); skipping GitHub release creation$(RESET)"; \
+		echo "$(CYAN)→ Tag $(VERS) is pushed. Create a GH release manually if desired.$(RESET)"; \
+	fi
 	@echo ""
-	@echo "$(GREEN)✓ Released $(VERSION)$(RESET)"
-	@echo "$(CYAN)→ Consumers can install with: go install $(MODULE_PATH)/cmd/cascade@$(VERSION)$(RESET)"
+	@echo "$(GREEN)✓ Released $(VERS)$(RESET)"
+	@echo "$(CYAN)→ Consumers can install with: go install $(MODULE_PATH)/cmd/cascade@$(VERS)$(RESET)"
 	@echo ""
