@@ -422,7 +422,7 @@ push:
 release-dry-run:
 	@echo ""
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════╗$(RESET)"
-	@echo "$(CYAN)║$(RESET) $(BLUE)Dry Run: Releasing $(PROJECT_NAME)$(RESET)                            $(CYAN)║$(RESET)"
+	@echo "$(CYAN)║$(RESET) $(BLUE)Dry Run: Releasing $(PROJECT_NAME)$(RESET)                               $(CYAN)║$(RESET)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════╝$(RESET)"
 	@echo ""
 	@echo "$(BLUE)Verifying module is ready for release...$(RESET)"
@@ -447,6 +447,12 @@ release-dry-run:
 
 .PHONY: release
 release:
+	@echo ""
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════╗$(RESET)"
+	@echo "$(CYAN)║$(RESET) $(BLUE)Releasing $(PROJECT_NAME) $(VERSION)$(RESET)                                  $(CYAN)║$(RESET)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════╝$(RESET)"
+	@echo ""
+
 	@if [ -z "$(VERSION)" ]; then \
 		echo "$(RED)Error: VERSION variable not set$(RESET)"; \
 		echo "Usage: make release VERSION=v0.1.0"; \
@@ -460,11 +466,6 @@ release:
 		echo "$(RED)Error: tag $(VERSION) already exists$(RESET)"; \
 		exit 1; \
 	fi
-	@echo ""
-	@echo "$(CYAN)╔══════════════════════════════════════════════════════════╗$(RESET)"
-	@echo "$(CYAN)║$(RESET) $(BLUE)Releasing $(PROJECT_NAME) $(VERSION)$(RESET)                           $(CYAN)║$(RESET)"
-	@echo "$(CYAN)╚══════════════════════════════════════════════════════════╝$(RESET)"
-	@echo ""
 	@echo "$(YELLOW)⚠ This will tag $(VERSION) and push the tag to:$(RESET)"
 	@for remote in $(GIT_REMOTES); do echo "    - $$remote"; done
 	@echo "$(YELLOW)⚠ Module proxies (proxy.golang.org) will index the tag automatically$(RESET)"
