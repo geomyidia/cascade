@@ -20,10 +20,15 @@ var ErrGitDiffFailed = errors.New("git diff failed")
 // Unwrap directly.
 //
 // The shape mirrors pkg/golist.ExitError so contributors who already know one
-// know the other (EH-08 + EH-16).
+// know the other (EH-08 + EH-16). The Dir field was added to close F-5 in
+// docs/dev/0014-go-quality-audit.md, restoring full cousin-shape parity.
 type GitDiffError struct {
 	// Cmd is the full argv as passed to exec, in order, for reproduction.
 	Cmd []string
+
+	// Dir is the working directory the command was run in (typically the
+	// absolutized cfg.root from the cli layer). Mirrors *golist.ExitError.Dir.
+	Dir string
 
 	// ExitCode is the subprocess exit code (typically 1 or 128 for `git diff`
 	// errors; may be other values).

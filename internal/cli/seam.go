@@ -12,12 +12,14 @@ import (
 // gitDiffResult is the io seam's return shape: stdout (a Reader so tests can
 // supply bytes.Buffer / strings.Reader / etc.), the raw cmd.Run error (nil on
 // success; *exec.ExitError on non-zero; other errors for fork failures /
-// cancellation / lookup failures), and the captured stderr text. Mirrors
-// pkg/golist's runResult.
+// cancellation / lookup failures), the captured stderr text, and the actual
+// argv the seam used (so the cli layer's diagnostic doesn't drift from the
+// real exec invocation; closes F-14). Mirrors pkg/golist's runResult.
 type gitDiffResult struct {
 	stdout io.Reader
 	err    error
 	stderr string
+	argv   []string
 }
 
 // runGitDiff is the function-variable seam over the os/exec call. Production
@@ -30,14 +32,18 @@ type gitDiffResult struct {
 var runGitDiff = defaultRunGitDiff
 
 // defaultRunGitDiff shells out to `git diff --name-only <base>..<head>` in
-// the configured working directory and captures stdout / stderr.
+// the configured working directory and captures stdout / stderr. The argv
+// it constructs is returned verbatim in the gitDiffResult so the cli layer's
+// diagnostic chain (in *GitDiffError.Cmd) reflects the actual exec, not a
+// reconstruction that could drift.
 //
 // gosec G204 (subprocess from variable) is suppressed: argv[0] is the literal
 // string "git" (a constant); argv[1:] is constructed from caller-supplied
 // refs that are documented as caller-controlled. The package contract makes
 // this explicit.
 func defaultRunGitDiff(ctx context.Context, base, head, dir string) gitDiffResult {
-	cmd := exec.CommandContext(ctx, "git", "diff", "--name-only", base+".."+head) //nolint:gosec
+	argv := []string{"git", "diff", "--name-only", base + ".." + head}
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -45,7 +51,7 @@ func defaultRunGitDiff(ctx context.Context, base, head, dir string) gitDiffResul
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
-	return gitDiffResult{stdout: &stdout, err: err, stderr: stderr.String()}
+	return gitDiffResult{stdout: &stdout, err: err, stderr: stderr.String(), argv: argv}
 }
 
 // classifyGitDiffError converts an exec.Cmd.Run error into the appropriate
@@ -66,7 +72,11 @@ func defaultRunGitDiff(ctx context.Context, base, head, dir string) gitDiffResul
 // error a cancellation?" and never propagates ctx anywhere else; that is
 // outside CC-08's intended scope. Mirrors pkg/golist's classifyRunError so
 // readers who learn one know the other.
-func classifyGitDiffError(err error, argv []string, _, stderr string, ctx context.Context) error {
+//
+// dir is the working directory the seam ran the subprocess in (typically the
+// absolutized cfg.root); stored on *GitDiffError.Dir for cousin-shape parity
+// with *golist.ExitError (closes F-5 in docs/dev/0014-go-quality-audit.md).
+func classifyGitDiffError(err error, argv []string, dir, stderr string, ctx context.Context) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return fmt.Errorf("git diff: %w", ctxErr)
 	}
@@ -74,6 +84,7 @@ func classifyGitDiffError(err error, argv []string, _, stderr string, ctx contex
 	if errors.As(err, &exitErr) {
 		return &GitDiffError{
 			Cmd:        append([]string(nil), argv...),
+			Dir:        dir,
 			ExitCode:   exitErr.ExitCode(),
 			Stderr:     stderr,
 			underlying: exitErr,

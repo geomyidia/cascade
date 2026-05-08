@@ -264,6 +264,11 @@ func TestClassifyGitDiffError(t *testing.T) {
 		if ge.Stderr != "fatal: bad ref\n" {
 			t.Errorf("ge.Stderr = %q, want %q", ge.Stderr, "fatal: bad ref\n")
 		}
+		// F-5: Dir is propagated onto *GitDiffError for cousin-shape parity
+		// with *golist.ExitError.
+		if ge.Dir != "/m" {
+			t.Errorf("ge.Dir = %q, want %q", ge.Dir, "/m")
+		}
 	})
 
 	t.Run("other_exec_error", func(t *testing.T) {

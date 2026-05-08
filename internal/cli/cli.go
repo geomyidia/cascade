@@ -266,8 +266,10 @@ func loadChangeSet(ctx context.Context, cfg *config, stdin io.Reader) ([]string,
 	case "":
 		res := runGitDiff(ctx, cfg.base, cfg.head, cfg.root)
 		if res.err != nil {
-			argv := []string{"git", "diff", "--name-only", cfg.base + ".." + cfg.head}
-			return nil, classifyGitDiffError(res.err, argv, cfg.root, res.stderr, ctx)
+			// res.argv comes back from the seam itself, so the diagnostic
+			// chain reflects the actual exec invocation rather than a
+			// reconstruction (closes F-14 in 0014-go-quality-audit.md).
+			return nil, classifyGitDiffError(res.err, res.argv, cfg.root, res.stderr, ctx)
 		}
 		return scanLines(res.stdout)
 	case "-":
