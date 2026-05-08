@@ -287,9 +287,62 @@ The audit found the codebase substantially clean. Five positive observations:
 
 ---
 
+## CDC verification
+
+CDC pass run against the same head the auditor cited (`b1a0c03`). Sandbox has no `go` toolchain so the lint/test-pass claims stay auditor-attested via local + CI green; structural findings reproducible by direct read are re-checked.
+
+**Spot-checks reproduced (representative; not exhaustive):**
+
+- **F-1** — `pkg/golist/errors.go:16` reads `// against Error() output is forbidden (AP-02).` and `internal/cli/errors.go:14` reads `(AP-13)` for the same rule. The cite drift is real and the cousin file gets it right. ✓
+- **F-2 / F-3** — `pkg/golist/golist.go:204` and `internal/cli/seam.go:62` both read `against EH-08 ordering convention`. EH-08 in the loaded substrate is "Pointer Receivers for Error Types"; the convention being deviated from is CC-08 / API-01. Cite-vs-content drift. ✓
+- **F-5** — `internal/cli/seam.go:65`'s `classifyGitDiffError(err error, argv []string, _, stderr string, …)` takes `_` where the cousin `pkg/golist/golist.go:205`'s `classifyRunError(err error, argv []string, dir string, stderr string, …)` takes `dir`. The cli version receives `cfg.root` at the call site (`cli.go:270`) and discards it. Real cousin-shape divergence. ✓
+- **F-6** — `grep -rn 't\.Parallel' cmd internal pkg` returns zero. Codebase has no `t.Parallel()` calls. The "no parallel + global seams" discipline holds; the latent risk to a future contributor is real. ✓
+- **F-10 / F-11** — `pkg/changeset/changeset.go:65-68` claims "moduleRoot stays empty and relative paths silently fail" when `getCwd` returns an error. The fix at lines 119-121 (`filepath.Abs(cfg.moduleRoot)`) absolutizes unconditionally; `filepath.Abs("")` resolves to the process cwd. Doc lies about code; behaviour is correct but for different reasons than the doc states. **This is a substantive finding** — earlier CDC passes on M4 didn't catch the doc/code drift introduced by bug-#12's fix. The audit is the artifact that caught it. ✓
+- **F-13** — `pkg/golist/golist.go:241` has `_ = io.EOF` with a justification comment about "keeping the import alive"; line 91 already uses `io.Reader` in production. The placeholder is dead. ✓
+- **F-14** — `cli.go:269` constructs `argv := []string{"git", "diff", "--name-only", cfg.base + ".." + cfg.head}` for the diagnostic; `seam.go:40`'s `exec.CommandContext(ctx, "git", "diff", "--name-only", base+".."+head)` is the actual exec. Two independent constructions; can drift. ✓
+- **F-15** — `pkg/changeset/changeset.go:17-21`'s `config { moduleRoot string; moduleRootSet bool }`. Post-bug-#12, the user-visible behaviour of the `moduleRootSet=false` path and the `moduleRootSet=true; moduleRoot=""` path are identical (both flow through `filepath.Abs("")` to cwd). The flag exists to support the seam tests. ✓
+
+**Severity assignments are calibrated.** Zero MUST findings is the right outcome — cascade is genuinely clean at the correctness/safety floor. The 5 SHOULD / 4 CONSIDER / 4 POLISH / 3 Acknowledged-with-rationale split is well-distributed; no severity inflation, no severity deflation. The auditor resisted the temptation to pad findings to look thorough.
+
+**Methodology adherence is exemplary.** The substrate-loaded enumeration at the top of the report names each guide consulted with concrete pattern-ID citations (AP-08, AP-13, CC-08, EH-08, EH-12, EH-15, EH-16, EH-17, IM-04, IM-12, IM-17, TD-09, DC-01, DC-02, DC-04, DC-09, TE-05, TE-11, TE-21, PS-04, PS-06, PS-07, plus the per-finding row IDs). The "Honest engagement note" at the bottom — surfacing the audit prompt's own `TD-09 / IM-04` mis-pair as part of the systemic ID-drift trend — is exactly the flag-dissonance discipline the methodology asks for. The auditor pushed back on the meta-substrate when the trend warranted; that's not deferential, it's correct.
+
+**Trending findings (S-1, S-2) capture real recurring patterns.** S-1's three off-by-prefix cite errors (one within prefix, two cross-prefix) is a genuine pattern; the recommendation (a one-time grep against the substrate, optionally a pre-commit hook) is the right shape. S-2's six-instance seam-pattern frame is honest: it names the AP-08 deviation, names the structural alternative (DI-by-interface), and names the actual mitigation cascade relies on (no `t.Parallel`). The S-2 closing — *"a real, working compromise but it depends on a discipline that isn't enforced anywhere"* — is the methodology's "write to the floor, not the ceiling" voice in operational form.
+
+**The "What Worked Well" section is concrete, not generic.** Each of the five positive observations names file:line evidence. The error-type-cousin pattern observation specifically calls out the compile-time `_ error = (*ExitError)(nil)` assertions at `golist.go:235-236` as making the contract grep-visible — that's the kind of specific positive finding that turns Safety-II into a discipline rather than a platitude.
+
+**On the four Open Questions:**
+
+1. **CC-08 calibration on post-hoc classifiers (F-4).** Agree with the auditor's accept-with-rationale. The substrate's CC-08 `MUST` is calibrated to *propagation* (functions that pass ctx forward into a blocking call); post-hoc classifiers consult `ctx.Err()` once and discard, which is a different shape. The deviation is consistently applied across both `classifyRunError` and `classifyGitDiffError`, the rationale is documented inline, and a strict-CC-08 fix would force the cousin functions out of shape with each other. Closure stands.
+
+2. **PS-06 vs CLAUDE.md (F-12).** Agree with the auditor's Acknowledged-with-rationale closure, with one caveat. PS-06 is `SHOULD-AVOID` (community convention, not a Uber/Google MUST). The maintainer's documented rationale at the time of the package-layout refactor (workbench/0006-package-layout-refactor.md decisions L-1 through L-8) is concrete: tighter top-level + explicit OSS surface area + `internal/` for compiler-enforced privacy. That's the kind of articulated trade-off `LEDGER_DISCIPLINE.md` calls a legitimate closure. **The caveat:** the substrate's deviation cost is real (longer import paths for downstream consumers), and `pre-v1.0` is the window to revisit if a flatter layout becomes feasible. Worth a one-line carry-forward in the v1.0 scoping.
+
+3. **Seam-pattern systemic risk (S-2).** Agree with the auditor. Mitigation via "no `t.Parallel()` discipline + per-test-file documentation note" is sufficient for the project's current scale (15 test files, single maintainer). The structural alternative (interface-based DI) would force every public io-edge'd function to grow a `Runner`/`Resolver` parameter, polluting the public API for testing. Trade-off is correctly weighted; the latent risk (a future contributor adding `t.Parallel()`) is bounded and visible (race detector would surface it immediately). The auditor's recommendation 3 (a custom `go vet`-style linter that fails the build if any test file using the seams calls `t.Parallel()`) is the durable structural enforcement; worth weighing for v1.0+.
+
+4. **`moduleRootSet bool` (F-15).** Agree. Tolerable. Drop-and-restructure cost (delete the flag, delete the `getCwd` seam, rewrite `TestResolve_DefaultUsesGetCwd` and `TestResolve_GetCwdErrorTolerated` via `t.Chdir`) exceeds the readability cost of the boolean. Closure stands.
+
+**Two minor observations from CDC's pass:**
+
+The auditor's closure honestly notes that the audit prompt's own `TD-09 / IM-04` pairing was wrong (receiver-consistency lives at IM-12 in the loaded substrate, not IM-04 as the prompt and earlier retros stated). That's the meta-substrate drift the M3 retro first surfaced, repeated in this audit, and now caught a second time. **This means the original prompt I (CDC) wrote contained the same ID-drift as the M3 retro — three instances now, which by S-1's own logic makes it a systemic finding against the meta-substrate.** Honest reproduction of CC's escalation: my own prompt-writing is part of the trend. Worth fixing in the prompt before any future audit is run.
+
+The auditor explicitly flagged that they did NOT cover Makefile or `scripts/` for shell-portability (per the prompt's out-of-scope list); CDC confirms this scope decision was honored. The shell-portability discipline (bash 3.2 compatibility per CLAUDE.md) is documented elsewhere; out of scope for a Go quality audit.
+
+**Closure recommendation: the audit is substantively excellent and ready to consume.**
+
+The 13 open findings naturally group into three follow-up batches:
+
+- **A: Documentation pass (one PR).** F-1, F-2, F-3 (cite fixes; one-character edits each), F-10, F-11 (doc drift in `pkg/changeset` post-bug-#12), F-13 (dead `_ = io.EOF`). Plus the prompt-itself fix surfaced in CDC pass 2 (rewrite `TD-09 / IM-04` → `IM-12 / TD-09` in `workbench/cc-audit-prompt-go-quality.md`). Cheap, clean, useful.
+- **B: Cousin-shape symmetry (one PR).** F-5 — add `Dir string` to `*GitDiffError`, populate it from `cfg.root` at the call site. Brings the typed-error cousins into shape; small refactor.
+- **C: Test-discipline note (CONTRIBUTING.md edit).** F-6 + F-16 — one-line note in CONTRIBUTING.md's testing section: "Tests in this codebase mutate package-level seam variables and build-metadata variables. Do not call `t.Parallel()` in any test that exercises these — the `-race` detector would surface immediately. The seam pattern's parallel-safety alternative is documented in S-2 of the 0014 audit."
+
+The CONSIDER findings (F-9, F-14, F-15) and Acknowledged-with-rationale (F-4, F-12, F-16) sit fine as-is; document if anything changes at v1.0.
+
+None of this blocks M6. The audit's findings are quality-of-life improvements and trend-captures, not v0.1.0 release blockers.
+
+Five-for-five on the CC self-check protocol catching zero softpedals across milestones; six-for-six now if you count this audit's discipline (the auditor independently re-derived findings from substrate, didn't re-litigate retro-disclosed deviations, surfaced cite drift back at the prompt). The methodology is paying compound interest.
+
 ## Closure
 
-Audit run complete. Total findings: 16. Open: 13. Acknowledged-with-rationale: 3 (F-4 ctx-as-last-param; F-12 `pkg/` layout; F-16 mutable build-info vars). CDC review pending.
+Audit run complete. Total findings: 16. Open: 13. Acknowledged-with-rationale: 3 (F-4 ctx-as-last-param; F-12 `pkg/` layout; F-16 mutable build-info vars). CDC review **complete** — every spot-checked claim reproduces against the cited file:line; severity assignments calibrated; methodology adherence exemplary; closure recommendation: ready to consume, follow-up PRs grouped above.
 
 Total Go files audited: **27** (excluding `pkg/golist/testdata/sample-module/*.go` fixtures, which are scope-out per the audit prompt's "testdata is fixture, not project code"). Lines of code reviewed (rough): **~5000** (≈1700 production, ≈3300 test).
 
