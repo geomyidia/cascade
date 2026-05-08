@@ -51,6 +51,21 @@ var versionFile string
 // (GitCommit, BuildDate). GitBranch and GitSummary stay empty under the
 // fallback path — Go's build-info doesn't carry branch names, and a
 // synthesised git-describe could diverge from the Makefile representation.
+//
+// AP-07 deviation (acknowledged): these are exported package-level
+// **mutable** vars. The substrate's AP-07 ("Mutable Package-Level
+// Globals") is SHOULD-AVOID. Rationale for keeping them: cascade uses
+// them as **link-time injection targets** for `-ldflags -X`, populated
+// once before init() runs and never mutated thereafter in production.
+// They are the standard Go pattern for build-info embedding (also seen
+// in `kubectl`, `hugo`, every cobra-based CLI). AP-07's hazards
+// (order-dependent tests, multi-tenancy collisions) don't apply because
+// these aren't config or registries — they're constants whose value is
+// set at link time. Tests in this package and `internal/cli/cli_test.go`
+// do mutate them (via the withMetadata helper in version_test.go); the
+// "do not call t.Parallel() in any test that mutates these" discipline
+// is documented in S-2 of docs/dev/0014-go-quality-audit.md and at the
+// top of every seam-using *_test.go file.
 var (
 	// Version is the cascade module version, sourced from project/VERSION.
 	// Always populated (either via ldflags or the go:embed fallback).

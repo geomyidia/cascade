@@ -16,7 +16,15 @@ type Option func(*config)
 // config holds the resolved option state for a single Resolve call.
 // Unexported: callers compose configuration only via With* constructors.
 type config struct {
-	moduleRoot    string
+	moduleRoot string
+
+	// moduleRootSet distinguishes "user explicitly supplied WithModuleRoot"
+	// from "no option supplied." Post-bug-#12 the user-visible behaviour is
+	// identical for both (filepath.Abs("") and filepath.Abs(".") both
+	// resolve to the cwd), so the flag exists primarily so seam_test.go
+	// can drive the os.Getwd-error fallback branch deterministically.
+	// Documented as a deliberate test-driven design choice in F-15 of
+	// docs/dev/0014-go-quality-audit.md.
 	moduleRootSet bool
 }
 
@@ -64,8 +72,15 @@ var getCwd = os.Getwd
 //
 // opts configure the call. The only option in v0.x is WithModuleRoot; if
 // not supplied, Resolve falls back to os.Getwd. If os.Getwd itself returns
-// an error (rare), moduleRoot stays empty and relative paths silently fail
-// to resolve — same outcome as passing WithModuleRoot("").
+// an error (rare), moduleRoot is left as the zero value at the fallback
+// step; the subsequent filepath.Abs("") then resolves it to the process
+// cwd anyway, so relative changedFiles are interpreted against the cwd —
+// identical to passing WithModuleRoot("") or WithModuleRoot(".") (closes
+// bug #12). If the absolutized cwd doesn't share a prefix with any
+// pkg.Dir, the parent-directory lookup returns no matches and Resolve
+// produces an empty result — the same observable outcome the original
+// "stays empty" doc claimed, but reached through filepath.Abs's fallback
+// rather than the empty string flowing untouched.
 //
 // Mapping rules:
 //   - A file ending in ".go" whose parent directory exactly matches some
@@ -113,9 +128,11 @@ func Resolve(changedFiles []string, pkgs []golist.Package, opts ...Option) []str
 	// (which golist documents as absolute) succeeds even when the caller
 	// supplies a relative path. filepath.Abs("") and filepath.Abs(".")
 	// both resolve to the cwd, so this also handles the empty-string case
-	// gracefully. On error (rare; documented in os.Getwd), leave as-is —
-	// the lookup will fail consistently with the unfixed relative-input
-	// case rather than panic. Closes bug #12.
+	// (including the getCwd-error fallback at line 107) gracefully — the
+	// empty value is replaced by the process cwd here, not "left as-is."
+	// If filepath.Abs itself errors (rare; documented in path/filepath),
+	// the lookup falls back to the unmodified value and fails consistently
+	// rather than panicking. Closes bug #12.
 	if abs, err := filepath.Abs(cfg.moduleRoot); err == nil {
 		cfg.moduleRoot = abs
 	}

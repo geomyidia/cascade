@@ -8,6 +8,11 @@ import (
 	"testing"
 )
 
+// Parallel-unsafe: tests in this file mutate the package-level build-info
+// vars (Version, GitCommit, GitBranch, GitSummary, BuildDate) and the
+// readBuildInfo seam. Do not call t.Parallel() in any test that uses
+// withMetadata. See S-2 in docs/dev/0014-go-quality-audit.md.
+
 // withMetadata sets the package-level build vars for the duration of the
 // test and restores them afterward. Tests use this to exercise both the
 // empty-default path and the populated-via-ldflags path without relying on

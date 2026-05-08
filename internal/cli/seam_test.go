@@ -15,6 +15,10 @@ import (
 	"github.com/geomyidia/cascade/pkg/golist"
 )
 
+// Parallel-unsafe: tests in this file mutate package-level seam variables
+// (runGitDiff, runGoListWrapper, signalContext). Do not call t.Parallel()
+// in any test that exercises them. See S-2 in docs/dev/0014-go-quality-audit.md.
+
 // withGitDiffSeam swaps the package-level runGitDiff for the duration of a
 // test, restoring the default afterward. Mirrors pkg/golist's withSeam.
 func withGitDiffSeam(t *testing.T, fn func(ctx context.Context, base, head, dir string) gitDiffResult) {

@@ -8,6 +8,10 @@ import (
 	"testing"
 )
 
+// Parallel-unsafe: tests in this file mutate the package-level runGoList
+// seam. Do not call t.Parallel() in any test that exercises it. See S-2
+// in docs/dev/0014-go-quality-audit.md.
+
 // withSeam swaps the package-level runGoList for the duration of a
 // test, restoring the default afterward.
 func withSeam(t *testing.T, fn func(_ context.Context, argv []string, dir string, env []string) runResult) {

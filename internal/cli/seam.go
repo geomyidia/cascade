@@ -59,9 +59,13 @@ func defaultRunGitDiff(ctx context.Context, base, head, dir string) gitDiffResul
 //   - other exec errors (rare; e.g. permission denied on git binary, or git
 //     not on PATH): wrapped under ErrGitDiffFailed for category clarity.
 //
-// ctx is the last param (against EH-08 ordering convention) because it's only
-// used to detect cancellation post-hoc, not for propagation. Mirrors
-// pkg/golist's classifyRunError.
+// ctx is the last param, deliberately deviating from CC-08 (ctx is the
+// first parameter). The CC-08 MUST is calibrated to *propagation* — a
+// function that passes ctx forward into a blocking call. This classifier
+// consults ctx.Err() exactly once, post-hoc, to disambiguate "is this
+// error a cancellation?" and never propagates ctx anywhere else; that is
+// outside CC-08's intended scope. Mirrors pkg/golist's classifyRunError so
+// readers who learn one know the other.
 func classifyGitDiffError(err error, argv []string, _, stderr string, ctx context.Context) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return fmt.Errorf("git diff: %w", ctxErr)

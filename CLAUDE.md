@@ -91,6 +91,8 @@ Algorithmic packages. **No io, no syscalls, no `os/exec`** between them. Inputs 
 
 These three packages are **gated at 100% statement coverage in CI** by `scripts/coverage-check.sh`. The gate skips packages with no coverage data ("N/A"), so empty pre-implementation stubs don't fire it; once a package gets code, the gate fires immediately.
 
+**Layout deviation note (PS-06).** The substrate's `assets/ai/go/guides/10-project-structure.md` flags `pkg/` as `SHOULD-AVOID` — a community convention rather than a Uber/Google rule, but one the Go standard library and most idiomatic projects don't follow. Cascade adopts `pkg/` deliberately: it makes the public OSS surface explicit, pairs cleanly with `internal/`'s language-enforced privacy boundary, and keeps the substrate of "what's importable by downstreams" obvious at a glance. The deviation is acknowledged in the M2-M5 audit (`docs/dev/0014-go-quality-audit.md` finding F-12) as **Acknowledged-with-rationale**. **Carry-forward:** revisit at v1.0 if a flatter layout becomes feasible without breaking downstream consumers' import paths.
+
 ### Private support — module-internal (`internal/project/`)
 
 Build-metadata package; carries cascade-specific Version / GitCommit / GitBranch / BuildDate values populated via `-ldflags` at link time, with a `runtime/debug.ReadBuildInfo` fallback for `go install`-built binaries. The pattern is generic but the values are cascade-specific; Go's `internal/` rule structurally enforces that downstream consumers cannot import this package. Also gated at 100% coverage by `scripts/coverage-check.sh`.

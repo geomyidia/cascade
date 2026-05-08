@@ -13,7 +13,7 @@ import (
 //
 // These follow the EH-36 sentinel naming convention (ErrXxx) and are
 // the only mechanism callers should use to classify errors — string-match
-// against Error() output is forbidden (AP-02).
+// against Error() output is forbidden (AP-13).
 var (
 	// ErrGoNotFound is returned when the `go` binary cannot be found on
 	// $PATH (or at the path configured via WithGoBin). The wrapped error

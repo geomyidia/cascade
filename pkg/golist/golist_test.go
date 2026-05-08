@@ -101,13 +101,19 @@ func TestRun_DefaultPatterns(t *testing.T) {
 		t.Skip("skipping subprocess test in short mode")
 	}
 
-	tests := [][]string{nil, {}}
-	for i, patterns := range tests {
-		t.Run(map[bool]string{true: "nil", false: "empty"}[patterns == nil], func(t *testing.T) {
-			pkgs, err := golist.Run(t.Context(), nil, patterns,
+	tests := []struct {
+		name     string
+		patterns []string
+	}{
+		{"nil", nil},
+		{"empty", []string{}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pkgs, err := golist.Run(t.Context(), nil, tc.patterns,
 				golist.WithDir(sampleModulePath(t)))
 			if err != nil {
-				t.Fatalf("Run failed (case %d): %v", i, err)
+				t.Fatalf("Run failed: %v", err)
 			}
 			if len(pkgs) == 0 {
 				t.Errorf("Run returned 0 packages with default ./...")

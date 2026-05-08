@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,6 +19,11 @@ import (
 // prints the project metadata to stdout and exits 0. Mirrors the M1
 // in-process version test that previously lived in cmd/cascade/main_test.go.
 func TestRun_Version(t *testing.T) {
+	// The save-restore dance below mirrors internal/project/version_test.go's
+	// withMetadata helper; we reproduce it inline here because withMetadata
+	// is unexported and adding a public test-only API just for one consumer
+	// is not worth the surface. See F-7 in docs/dev/0014-go-quality-audit.md.
+	// Parallel-unsafe (mutates package-level project.* vars; cousin of S-2).
 	saveVersion, saveCommit, saveBranch, saveSummary, saveDate :=
 		project.Version, project.GitCommit, project.GitBranch, project.GitSummary, project.BuildDate
 	t.Cleanup(func() {
@@ -203,5 +209,5 @@ func TestRun_FileChangedFiles_OpenFailure(t *testing.T) {
 
 // writeFile is a tiny test helper that writes content to path.
 func writeFile(path, content string) error {
-	return writeAll(path, []byte(content))
+	return os.WriteFile(path, []byte(content), 0o600)
 }

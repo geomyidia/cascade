@@ -200,8 +200,13 @@ func buildArgv(goBin string, tags []string, patterns []string) []string {
 //   - other exec errors (rare): returned wrapped with %w under
 //     ErrGoListFailed for category clarity.
 //
-// ctx is the last param (against EH-08 ordering convention) because it's
-// only used to detect cancellation post-hoc, not for propagation.
+// ctx is the last param, deliberately deviating from CC-08 (ctx is the
+// first parameter). The CC-08 MUST is calibrated to *propagation* — a
+// function that passes ctx forward into a blocking call. This classifier
+// consults ctx.Err() exactly once, post-hoc, to disambiguate "is this
+// error a cancellation?" and never propagates ctx anywhere else; that is
+// outside CC-08's intended scope. Cousin classifyGitDiffError keeps the
+// same shape so readers who learn one know the other.
 func classifyRunError(err error, argv []string, dir string, stderr string, ctx context.Context) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return fmt.Errorf("go list: %w", ctxErr)
@@ -235,8 +240,4 @@ var (
 	_ error  = (*ExitError)(nil)
 	_ error  = (*ParseError)(nil)
 	_ Option = WithDir("")
-	// Reference io to keep the import alive for future use; the streaming
-	// decoder lives in parse.go and consumes this package's io types via
-	// the parseStream helper.
-	_ = io.EOF
 )

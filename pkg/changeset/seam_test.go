@@ -7,6 +7,10 @@ import (
 	"github.com/geomyidia/cascade/pkg/golist"
 )
 
+// Parallel-unsafe: tests in this file mutate the package-level getCwd
+// seam. Do not call t.Parallel() in any test that exercises it. See S-2
+// in docs/dev/0014-go-quality-audit.md.
+
 // withCwdSeam swaps the package-level getCwd for the duration of a test,
 // restoring the default afterward. Mirrors pkg/golist's withSeam helper.
 func withCwdSeam(t *testing.T, fn func() (string, error)) {
