@@ -8,7 +8,7 @@
 **Source plan:** [`docs/dev/0011-implementation-plan-m5-cli-main-wiring.md`](./0011-implementation-plan-m5-cli-main-wiring.md) — wait, no — plan-mode plan at `~/.claude-private/plans/please-brush-up-on-joyful-pearl.md` (the plan was approved via ExitPlanMode prior to implementation; not committed to the repo per the convention for transient bug-fix planning).
 **Methodology:** [`assets/ai/LEDGER_DISCIPLINE.md`](../../assets/ai/LEDGER_DISCIPLINE.md), [`assets/ai/AI-ENGINEERING-METHODOLOGY.md`](../../assets/ai/AI-ENGINEERING-METHODOLOGY.md).
 **Target version:** v0.1.1 (patch release post-merge).
-**Verification target:** [an-internal-go-monorepo PR #3474](https://github.com/an-internal-go-monorepo/pull/3474) — the cascade-fix verification PR that should green once v0.1.1 ships.
+**Verification target:** a PR against an internal Go monorepo — the cascade-fix verification PR that should green once v0.1.1 ships.
 
 ## Bug summary
 
@@ -95,7 +95,7 @@ All five cascade packages remain at 100% coverage post-fix; no test contortions 
 
 **Post-merge** (closes after v0.1.1 tag + GH release):
 - `go install github.com/geomyidia/cascade/cmd/cascade@v0.1.1` against `proxy.golang.org` — confirm tag indexed cleanly (M5 F-18 lineage).
-- **an-internal-go-monorepo PR #3474** CI greens up. This is the load-bearing real-codebase closure for the bug — same shape as M2 F-18 and M5 F-19 (real-codebase verification proves the fix works at production scale).
+- **The internal-Go-monorepo verification PR** CI greens up. This is the load-bearing real-codebase closure for the bug — same shape as M2 F-18 and M5 F-19 (real-codebase verification proves the fix works at production scale).
 
 ## What Worked
 
@@ -121,12 +121,12 @@ All five cascade packages remain at 100% coverage post-fix; no test contortions 
 
 ## Open items / carry-forward
 
-- **v0.1.1 release** — tag + push + GH release after this PR merges. Standard M6 flow (manual tag + push to bypass the Makefile's go.sum bug). Release notes should call out: (a) bug #12 fix, (b) reproduction case, (c) verification PR (an-internal-go-monorepo #3474), (d) recommendation that v0.1.0 users upgrade.
-- **Real-world verification** — re-trigger an-internal-go-monorepo PR #3474's CI against the v0.1.1 binary. **This is the load-bearing closure for bug #12.** Synthetic tests pass; production-scale evidence is the structural proof.
+- **v0.1.1 release** — tag + push + GH release after this PR merges. Standard M6 flow (manual tag + push to bypass the Makefile's go.sum bug). Release notes should call out: (a) bug #12 fix, (b) reproduction case, (c) verification via a private downstream consumer's CI, (d) recommendation that v0.1.0 users upgrade.
+- **Real-world verification** — re-trigger the internal-Go-monorepo verification PR's CI against the v0.1.1 binary. **This is the load-bearing closure for bug #12.** Synthetic tests pass; production-scale evidence is the structural proof.
 - **Should v0.1.0 be `retract`-ed?** Plan deferred to data-driven decision. If real-world consumers report the bug beyond #12, add `retract v0.1.0` to go.mod in v0.2. If only the maintainer hit it, leave v0.1.0 available with the v0.1.1 release-notes recommending upgrade.
 - **Methodology note on coverage-vs-behavior gap.** Documented above; worth surfacing in any future M-spec's "test strategy" section so milestone leads explicitly enumerate the parameter-space matrix.
 - **The Makefile's `release-dry-run` go.sum bug.** Not blocking v0.1.1 (manual workaround works) but should be fixed before the next release flow. One-line fix: `git diff --quiet -- go.mod && { ! test -f go.sum || git diff --quiet -- go.sum; }`. Could ride alongside any v0.2 release-prep work.
 
 ## Closure
 
-All five deliverables landed; bug #12's reproduction case verified-fixed locally; all five cascade packages at 100% coverage; `make check-all` green. Awaiting CDC verification. Real-world-codebase closure pending v0.1.1 release + an-internal-go-monorepo PR #3474 re-trigger.
+All five deliverables landed; bug #12's reproduction case verified-fixed locally; all five cascade packages at 100% coverage; `make check-all` green. Awaiting CDC verification. Real-world-codebase closure pending v0.1.1 release + internal-monorepo verification PR re-trigger.
